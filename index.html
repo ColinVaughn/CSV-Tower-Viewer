@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSV Tower Data Analyzer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+      body { font-family: Arial, sans-serif; margin: 20px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+      th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+      th { background-color: #f2f2f2; cursor: pointer; }
+  </style>
+</head>
+<body>
+<h2>Upload CSV Files</h2>
+<input type="file" id="csvFile" multiple accept=".csv">
+<button onclick="processFiles()">Process</button>
+
+<h3>Filter by Number of Towers</h3>
+<input type="number" id="minTowers" placeholder="Min Towers">
+<input type="number" id="maxTowers" placeholder="Max Towers">
+<button onclick="filterData()">Apply Filter</button>
+
+<h2>Phone Number Analysis</h2>
+<table id="resultTable">
+  <thead>
+  <tr>
+    <th onclick="sortTable(0)">Phone Number</th>
+    <th onclick="sortTable(1)">Unique Towers (IDs & Addresses)</th>
+    <th onclick="sortTable(2)">Total Duration (s)</th>
+  </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+  let dataStore = {}; // Store phone numbers and their corresponding tower data
+
+  function processFiles() {
+    const files = document.getElementById('csvFile').files;
+    dataStore = {};
+
+    Array.from(files).forEach(file => {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          processCSVData(results.data);
+        }
+      });
+    });
+  }
+
+  function processCSVData(rows) {
+    rows.forEach(row => {
+      const phone = row['Msisdn'];
+      const tower = row['Mkt Enodeb Id'];
+      const address = row['Search Value']; // Address associated with tower
+      const duration = parseInt(row['TIMEUsage'] || 0);
+
+      if (!phone || !tower) return; // Skip invalid rows
+
+      if (!dataStore[phone]) {
+        dataStore[phone] = { towers: new Map(), totalDuration: 0 };
+      }
+      dataStore[phone].towers.set(tower, address);
+      dataStore[phone].totalDuration += duration;
+    });
+    renderTable();
+  }
+
+  function renderTable(filteredData = null) {
+    const tbody = document.querySelector('#resultTable tbody');
+    tbody.innerHTML = '';
+
+    const dataset = filteredData || Object.entries(dataStore).map(([phone, data]) => {
+      const towerInfo = Array.from(data.towers.entries()).map(([id, addr]) => `${id} (${addr})`).join(', ');
+      return { phone, uniqueTowers: data.towers.size, towerIDs: towerInfo, totalDuration: data.totalDuration };
+    });
+
+    dataset.forEach(({ phone, uniqueTowers, towerIDs, totalDuration }) => {
+      const row = `<tr>
+                    <td>${phone}</td>
+                    <td>${uniqueTowers} (${towerIDs})</td>
+                    <td>${totalDuration}</td>
+                </tr>`;
+      tbody.innerHTML += row;
+    });
+  }
+
+  function filterData() {
+    const minTowers = document.getElementById('minTowers').value || 0;
+    const maxTowers = document.getElementById('maxTowers').value || Infinity;
+
+    const filtered = Object.entries(dataStore).map(([phone, data]) => {
+      const towerInfo = Array.from(data.towers.entries()).map(([id, addr]) => `${id} (${addr})`).join(', ');
+      return { phone, uniqueTowers: data.towers.size, towerIDs: towerInfo, totalDuration: data.totalDuration };
+    }).filter(entry => entry.uniqueTowers >= minTowers && entry.uniqueTowers <= maxTowers);
+
+    renderTable(filtered);
+  }
+
+  function sortTable(columnIndex) {
+    const tbody = document.querySelector('#resultTable tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    rows.sort((a, b) => {
+      const valA = a.cells[columnIndex].innerText;
+      const valB = b.cells[columnIndex].innerText;
+      return isNaN(valA) ? valA.localeCompare(valB) : valB - valA;
+    });
+
+    tbody.innerHTML = '';
+    rows.forEach(row => tbody.appendChild(row));
+  }
+</script>
+</body>
+</html>
