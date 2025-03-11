@@ -10,6 +10,7 @@
       table { width: 100%; border-collapse: collapse; margin-top: 20px; }
       th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
       th { background-color: #f2f2f2; cursor: pointer; }
+      input { margin-right: 10px; }
   </style>
 </head>
 <body>
@@ -20,7 +21,13 @@
 <h3>Filter by Number of Towers</h3>
 <input type="number" id="minTowers" placeholder="Min Towers">
 <input type="number" id="maxTowers" placeholder="Max Towers">
-<button onclick="filterData()">Apply Filter</button>
+<button onclick="toggleFilter()">Apply/Remove Filter</button>
+
+<h3>Search Towers</h3>
+<input type="text" id="searchBox" placeholder="Search by Tower ID or Location" onkeyup="searchTable()">
+
+<h3>Merge Towers at Same Location</h3>
+<label><input type="checkbox" id="mergeTowers" onchange="renderTable()"> Merge Towers with Same Address</label>
 
 <h2>Phone Number Analysis</h2>
 <table id="resultTable">
@@ -29,13 +36,15 @@
     <th onclick="sortTable(0)">Phone Number</th>
     <th onclick="sortTable(1)">Unique Towers (IDs & Addresses)</th>
     <th onclick="sortTable(2)">Total Duration (s)</th>
+    <th onclick="sortTable(3)">Record Close Time (GMT)</th>
   </tr>
   </thead>
   <tbody></tbody>
 </table>
 
 <script>
-  let dataStore = {}; // Store phone numbers and their corresponding tower data
+  let dataStore = {};
+  let filterApplied = false;
 
   function processFiles() {
     const files = document.getElementById('csvFile').files;
@@ -54,17 +63,23 @@
 
   function processCSVData(rows) {
     rows.forEach(row => {
-      const phone = row['Msisdn'];
-      const tower = row['Mkt Enodeb Id'];
-      const address = row['Search Value']; // Address associated with tower
-      const duration = parseInt(row['TIMEUsage'] || 0);
+      let phone = row['Msisdn'] || row['MSISDN'];
+      let tower = row['Mkt Enodeb Id'] || row['eNB ID'];
+      let address = row['Search Value'];
+      let duration = parseInt(row['TIMEUsage'] || row['SOU'] || 0);
+      let recordTime = row['Rcd Close Dt/Tm (GMT)'] || 'N/A';
 
-      if (!phone || !tower) return; // Skip invalid rows
+      if (!phone || !tower) return;
 
       if (!dataStore[phone]) {
-        dataStore[phone] = { towers: new Map(), totalDuration: 0 };
+        dataStore[phone] = { towers: new Map(), totalDuration: 0, recordTimes: new Set() };
       }
-      dataStore[phone].towers.set(tower, address);
+
+      if (!dataStore[phone].towers.has(address)) {
+        dataStore[phone].towers.set(address, new Set());
+      }
+      dataStore[phone].towers.get(address).add(tower);
+      dataStore[phone].recordTimes.add(recordTime);
       dataStore[phone].totalDuration += duration;
     });
     renderTable();
@@ -73,20 +88,50 @@
   function renderTable(filteredData = null) {
     const tbody = document.querySelector('#resultTable tbody');
     tbody.innerHTML = '';
+    const mergeTowers = document.getElementById('mergeTowers').checked;
 
     const dataset = filteredData || Object.entries(dataStore).map(([phone, data]) => {
-      const towerInfo = Array.from(data.towers.entries()).map(([id, addr]) => `${id} (${addr})`).join(', ');
-      return { phone, uniqueTowers: data.towers.size, towerIDs: towerInfo, totalDuration: data.totalDuration };
+      let towerGroups = new Map();
+      data.towers.forEach((towers, address) => {
+        if (mergeTowers) {
+          towerGroups.set(address, Array.from(towers).join(', '));
+        } else {
+          Array.from(towers).forEach(tower => {
+            towerGroups.set(`${tower} (${address})`, '');
+          });
+        }
+      });
+
+      const towerInfo = Array.from(towerGroups.entries()).map(([addr, towers]) =>
+        towers ? `${towers} (${addr})` : addr
+      ).join(', ');
+
+      const recordTimes = Array.from(data.recordTimes).join(', ');
+
+      return { phone, uniqueTowers: towerGroups.size, towerIDs: towerInfo, totalDuration: data.totalDuration, recordTime: recordTimes };
     });
 
-    dataset.forEach(({ phone, uniqueTowers, towerIDs, totalDuration }) => {
+    dataset.sort((a, b) => a.phone.localeCompare(b.phone));
+
+    dataset.forEach(({ phone, uniqueTowers, towerIDs, totalDuration, recordTime }) => {
       const row = `<tr>
                     <td>${phone}</td>
                     <td>${uniqueTowers} (${towerIDs})</td>
                     <td>${totalDuration}</td>
+                    <td>${recordTime}</td>
                 </tr>`;
       tbody.innerHTML += row;
     });
+  }
+
+  function toggleFilter() {
+    if (filterApplied) {
+      filterApplied = false;
+      renderTable();
+    } else {
+      filterData();
+      filterApplied = true;
+    }
   }
 
   function filterData() {
@@ -94,8 +139,9 @@
     const maxTowers = document.getElementById('maxTowers').value || Infinity;
 
     const filtered = Object.entries(dataStore).map(([phone, data]) => {
-      const towerInfo = Array.from(data.towers.entries()).map(([id, addr]) => `${id} (${addr})`).join(', ');
-      return { phone, uniqueTowers: data.towers.size, towerIDs: towerInfo, totalDuration: data.totalDuration };
+      const towerInfo = Array.from(data.towers.entries()).map(([addr, towers]) => `${Array.from(towers).join(', ')} (${addr})`).join(', ');
+      const recordTimes = Array.from(data.recordTimes).join(', ');
+      return { phone, uniqueTowers: data.towers.size, towerIDs: towerInfo, totalDuration: data.totalDuration, recordTime: recordTimes };
     }).filter(entry => entry.uniqueTowers >= minTowers && entry.uniqueTowers <= maxTowers);
 
     renderTable(filtered);
@@ -113,6 +159,14 @@
 
     tbody.innerHTML = '';
     rows.forEach(row => tbody.appendChild(row));
+  }
+
+  function searchTable() {
+    const query = document.getElementById('searchBox').value.toLowerCase();
+    const rows = document.querySelectorAll('#resultTable tbody tr');
+    rows.forEach(row => {
+      row.style.display = row.innerText.toLowerCase().includes(query) ? '' : 'none';
+    });
   }
 </script>
 </body>
