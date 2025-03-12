@@ -3,14 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CSV Tower Data Analyzer</title>
+  <title>Advanced CSV Data Analyzer</title>
+  <!-- PapaParse for CSV parsing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <style>
       body { font-family: Arial, sans-serif; margin: 20px; }
       table { width: 100%; border-collapse: collapse; margin-top: 20px; }
       th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
       th { background-color: #f2f2f2; cursor: pointer; }
-      input { margin-right: 10px; }
+      input, select, button { margin: 5px 10px 5px 0; }
+      .filter-group { margin: 10px 0; }
   </style>
 </head>
 <body>
@@ -18,155 +20,292 @@
 <input type="file" id="csvFile" multiple accept=".csv">
 <button onclick="processFiles()">Process</button>
 
-<h3>Filter by Number of Towers</h3>
-<input type="number" id="minTowers" placeholder="Min Towers">
-<input type="number" id="maxTowers" placeholder="Max Towers">
-<button onclick="toggleFilter()">Apply/Remove Filter</button>
+<h3>Basic Search</h3>
+<input type="text" id="searchBox" placeholder="Search by any text" onkeyup="searchTable()">
 
-<h3>Search Towers</h3>
-<input type="text" id="searchBox" placeholder="Search by Tower ID or Location" onkeyup="searchTable()">
+<h3>Advanced Filters</h3>
+<div class="filter-group">
+  <label for="startDate">Start Date:</label>
+  <input type="datetime-local" id="startDate">
+  <label for="endDate">End Date:</label>
+  <input type="datetime-local" id="endDate">
+</div>
+<div class="filter-group">
+  <label for="minDuration">Min Duration (s):</label>
+  <input type="number" id="minDuration" placeholder="Min Duration">
+  <label for="maxDuration">Max Duration (s):</label>
+  <input type="number" id="maxDuration" placeholder="Max Duration">
+</div>
+<div class="filter-group">
+  <label for="cellTower">Cell Tower (Mkt Enodeb Id):</label>
+  <input type="text" id="cellTower" placeholder="Enter Tower ID">
+</div>
+<div class="filter-group">
+  <label for="callDirection">Call Direction:</label>
+  <select id="callDirection">
+    <option value="">Any</option>
+    <option value="incoming">Incoming</option>
+    <option value="outgoing">Outgoing</option>
+  </select>
+</div>
+<div class="filter-group">
+  <label for="searchMsisdn">Msisdn Search:</label>
+  <input type="text" id="searchMsisdn" placeholder="Enter Phone Number">
+</div>
+<div class="filter-group">
+  <label for="searchLocation">Search Location:</label>
+  <input type="text" id="searchLocation" placeholder="e.g., 2130 Highway 102, 748 Main Street">
+</div>
+<div class="filter-group">
+  <label for="minTowers">Min Towers:</label>
+  <input type="number" id="minTowers" placeholder="Min Towers">
+  <label for="maxTowers">Max Towers:</label>
+  <input type="number" id="maxTowers" placeholder="Max Towers">
+</div>
+<div class="filter-group">
+  <label>
+    <input type="checkbox" id="groupByPhone">
+    Group by Phone (Aggregate Towers & Locations)
+  </label>
+</div>
+<button onclick="applyAdvancedFilters()">Apply Advanced Filters</button>
+<button onclick="resetFilters()">Reset Filters</button>
 
-<h3>Merge Towers at Same Location</h3>
-<label><input type="checkbox" id="mergeTowers" onchange="renderTable()"> Merge Towers with Same Address</label>
-
-<h2>Phone Number Analysis</h2>
+<h2 id="tableTitle">Call Detail Analysis (Record Level)</h2>
 <table id="resultTable">
   <thead>
-  <tr>
-    <th onclick="sortTable(0)">Phone Number</th>
-    <th onclick="sortTable(1)">Unique Towers (IDs & Addresses)</th>
-    <th onclick="sortTable(2)">Total Duration (s)</th>
-    <th onclick="sortTable(3)">Record Close Time (GMT)</th>
+  <tr id="tableHeader">
+    <!-- Header content will be set dynamically -->
   </tr>
   </thead>
   <tbody></tbody>
 </table>
 
 <script>
-  let dataStore = {};
-  let filterApplied = false;
+  let currentDataset = [];
 
+  // Helper function to get a value by field name.
+  // If not found, for VOLTE files, try an alternative name: "volte <fieldName>"
+  function getValue(record, fieldName) {
+    if(record[fieldName]) return record[fieldName];
+    if(record.fileType === "volte") {
+      let alt = "volte " + fieldName;
+      if(record[alt]) return record[alt];
+    }
+    return '';
+  }
+
+  // Process selected CSV files with PapaParse
   function processFiles() {
     const files = document.getElementById('csvFile').files;
-    dataStore = {};
-
+    currentDataset = [];
     Array.from(files).forEach(file => {
+      // Determine file type from filename (VOLTE if filename includes "volte", else assume VCE)
+      let fileType = file.name.toLowerCase().includes("volte") ? "volte" : "vce";
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
+        // Normalize header: trim and convert to lowercase
+        transformHeader: header => header.trim().toLowerCase(),
         complete: function(results) {
-          processCSVData(results.data);
-        }
-      });
-    });
-  }
-
-  function processCSVData(rows) {
-    rows.forEach(row => {
-      let phone = row['Msisdn'] || row['MSISDN'];
-      let tower = row['Mkt Enodeb Id'] || row['eNB ID'];
-      let address = row['Search Value'];
-      let duration = parseInt(row['TIMEUsage'] || row['SOU'] || 0);
-      let recordTime = row['Rcd Close Dt/Tm (GMT)'] || 'N/A';
-
-      if (!phone || !tower) return;
-
-      if (!dataStore[phone]) {
-        dataStore[phone] = { towers: new Map(), totalDuration: 0, recordTimes: new Set() };
-      }
-
-      if (!dataStore[phone].towers.has(address)) {
-        dataStore[phone].towers.set(address, new Set());
-      }
-      dataStore[phone].towers.get(address).add(tower);
-      dataStore[phone].recordTimes.add(recordTime);
-      dataStore[phone].totalDuration += duration;
-    });
-    renderTable();
-  }
-
-  function renderTable(filteredData = null) {
-    const tbody = document.querySelector('#resultTable tbody');
-    tbody.innerHTML = '';
-    const mergeTowers = document.getElementById('mergeTowers').checked;
-
-    const dataset = filteredData || Object.entries(dataStore).map(([phone, data]) => {
-      let towerGroups = new Map();
-      data.towers.forEach((towers, address) => {
-        if (mergeTowers) {
-          towerGroups.set(address, Array.from(towers).join(', '));
-        } else {
-          Array.from(towers).forEach(tower => {
-            towerGroups.set(`${tower} (${address})`, '');
+          results.data.forEach(row => {
+            // Attach file type to each row
+            row.fileType = fileType;
+            // Convert timeusage to number (assuming header "timeusage")
+            row.timeusage = parseInt(row["timeusage"], 10) || 0;
+            currentDataset.push(row);
           });
+          renderRecordLevel(currentDataset);
         }
       });
-
-      const towerInfo = Array.from(towerGroups.entries()).map(([addr, towers]) =>
-        towers ? `${towers} (${addr})` : addr
-      ).join(', ');
-
-      const recordTimes = Array.from(data.recordTimes).join(', ');
-
-      return { phone, uniqueTowers: towerGroups.size, towerIDs: towerInfo, totalDuration: data.totalDuration, recordTime: recordTimes };
-    });
-
-    dataset.sort((a, b) => a.phone.localeCompare(b.phone));
-
-    dataset.forEach(({ phone, uniqueTowers, towerIDs, totalDuration, recordTime }) => {
-      const row = `<tr>
-                    <td>${phone}</td>
-                    <td>${uniqueTowers} (${towerIDs})</td>
-                    <td>${totalDuration}</td>
-                    <td>${recordTime}</td>
-                </tr>`;
-      tbody.innerHTML += row;
     });
   }
 
-  function toggleFilter() {
-    if (filterApplied) {
-      filterApplied = false;
-      renderTable();
-    } else {
-      filterData();
-      filterApplied = true;
-    }
-  }
-
-  function filterData() {
-    const minTowers = document.getElementById('minTowers').value || 0;
-    const maxTowers = document.getElementById('maxTowers').value || Infinity;
-
-    const filtered = Object.entries(dataStore).map(([phone, data]) => {
-      const towerInfo = Array.from(data.towers.entries()).map(([addr, towers]) => `${Array.from(towers).join(', ')} (${addr})`).join(', ');
-      const recordTimes = Array.from(data.recordTimes).join(', ');
-      return { phone, uniqueTowers: data.towers.size, towerIDs: towerInfo, totalDuration: data.totalDuration, recordTime: recordTimes };
-    }).filter(entry => entry.uniqueTowers >= minTowers && entry.uniqueTowers <= maxTowers);
-
-    renderTable(filtered);
-  }
-
-  function sortTable(columnIndex) {
+  // Render record-level table view
+  function renderRecordLevel(dataset) {
+    document.getElementById("tableTitle").innerText = "Call Detail Analysis (Record Level)";
+    // Include a File Type column in the header
+    document.getElementById("tableHeader").innerHTML = `
+      <th onclick="sortTable(0)">Msisdn</th>
+      <th onclick="sortTable(1)">Search Value</th>
+      <th onclick="sortTable(2)">Rcd Open Dt/Tm (GMT)</th>
+      <th onclick="sortTable(3)">TIMEUsage</th>
+      <th onclick="sortTable(4)">CallDirection</th>
+      <th onclick="sortTable(5)">Mkt Enodeb Id</th>
+      <th onclick="sortTable(6)">File Type</th>
+    `;
     const tbody = document.querySelector('#resultTable tbody');
-    const rows = Array.from(tbody.querySelectorAll('tr'));
-
-    rows.sort((a, b) => {
-      const valA = a.cells[columnIndex].innerText;
-      const valB = b.cells[columnIndex].innerText;
-      return isNaN(valA) ? valA.localeCompare(valB) : valB - valA;
-    });
-
-    tbody.innerHTML = '';
-    rows.forEach(row => tbody.appendChild(row));
+    tbody.innerHTML = dataset.map(record => {
+      return `<tr>
+                <td>${ getValue(record, "msisdn") || '' }</td>
+                <td>${ getValue(record, "search value") || '' }</td>
+                <td>${ record["rcd open dt/tm (gmt)"] || '' }</td>
+                <td>${ record["timeusage"] }</td>
+                <td>${ getValue(record, "calldirection") || '' }</td>
+                <td>${ getValue(record, "mkt enodeb id") || '' }</td>
+                <td>${ record.fileType.toUpperCase() }</td>
+              </tr>`;
+    }).join('');
   }
 
+  // Build aggregated dataset by grouping records by Msisdn
+  function buildAggregatedDataset() {
+    let aggregated = {};
+    currentDataset.forEach(record => {
+      let phone = getValue(record, "msisdn");
+      if (!phone) return;
+      if (!aggregated[phone]) {
+        aggregated[phone] = {
+          phone: phone,
+          towers: new Set(),
+          totalDuration: 0,
+          locations: new Set(),
+          fileTypes: new Set()
+        };
+      }
+      if (getValue(record, "mkt enodeb id")) {
+        aggregated[phone].towers.add(getValue(record, "mkt enodeb id"));
+      }
+      if (getValue(record, "search value")) {
+        aggregated[phone].locations.add(getValue(record, "search value").toLowerCase().trim());
+      }
+      aggregated[phone].totalDuration += record["timeusage"];
+      aggregated[phone].fileTypes.add(record.fileType.toUpperCase());
+    });
+    let aggregatedArray = Object.keys(aggregated).map(phone => {
+      let data = aggregated[phone];
+      return {
+        Msisdn: phone,
+        "Unique Towers": data.towers.size,
+        "Tower IDs": Array.from(data.towers).join(', '),
+        "Total Duration": data.totalDuration,
+        "Locations": Array.from(data.locations).join(', '),
+        "File Type": Array.from(data.fileTypes).join(', ')
+      };
+    });
+    return aggregatedArray;
+  }
+
+  // Render aggregated (group by phone) view
+  function renderAggregatedLevel(dataset) {
+    document.getElementById("tableTitle").innerText = "Call Detail Analysis (Aggregated by Phone)";
+    document.getElementById("tableHeader").innerHTML = `
+      <th onclick="sortTable(0)">Msisdn</th>
+      <th onclick="sortTable(1)">Unique Towers</th>
+      <th onclick="sortTable(2)">Tower IDs</th>
+      <th onclick="sortTable(3)">Total Duration</th>
+      <th onclick="sortTable(4)">Locations</th>
+      <th onclick="sortTable(5)">File Type</th>
+    `;
+    const tbody = document.querySelector('#resultTable tbody');
+    tbody.innerHTML = dataset.map(record => {
+      return `<tr>
+                <td>${record.Msisdn || ''}</td>
+                <td>${record["Unique Towers"] || 0}</td>
+                <td>${record["Tower IDs"] || ''}</td>
+                <td>${record["Total Duration"]}</td>
+                <td>${record["Locations"] || ''}</td>
+                <td>${record["File Type"] || ''}</td>
+              </tr>`;
+    }).join('');
+  }
+
+  // Basic search on table text
   function searchTable() {
     const query = document.getElementById('searchBox').value.toLowerCase();
     const rows = document.querySelectorAll('#resultTable tbody tr');
     rows.forEach(row => {
       row.style.display = row.innerText.toLowerCase().includes(query) ? '' : 'none';
     });
+  }
+
+  // Apply advanced filters based on input fields
+  function applyAdvancedFilters() {
+    let startDateVal = document.getElementById('startDate').value;
+    let endDateVal = document.getElementById('endDate').value;
+    let minDuration = parseInt(document.getElementById('minDuration').value, 10);
+    let maxDuration = parseInt(document.getElementById('maxDuration').value, 10);
+    let cellTower = document.getElementById('cellTower').value.toLowerCase();
+    let callDirection = document.getElementById('callDirection').value;
+    let searchMsisdn = document.getElementById('searchMsisdn').value.toLowerCase();
+    let searchLocationInput = document.getElementById('searchLocation').value.trim();
+    let minTowers = parseInt(document.getElementById('minTowers').value, 10);
+    let maxTowers = parseInt(document.getElementById('maxTowers').value, 10);
+    let groupBy = document.getElementById('groupByPhone').checked;
+
+    let locationTerms = [];
+    if (searchLocationInput) {
+      locationTerms = searchLocationInput.split(',')
+        .map(term => term.trim().toLowerCase())
+        .filter(term => term.length > 0);
+    }
+
+    if (groupBy) {
+      let aggregated = buildAggregatedDataset();
+      let filtered = aggregated.filter(record => {
+        if (!isNaN(minTowers) && record["Unique Towers"] < minTowers) return false;
+        if (!isNaN(maxTowers) && record["Unique Towers"] > maxTowers) return false;
+        if (searchMsisdn && record.Msisdn.toLowerCase().indexOf(searchMsisdn) === -1) return false;
+        // For aggregated search location filtering, require ALL terms to be found in the Locations field.
+        if (locationTerms.length > 0) {
+          let locations = record["Locations"].toLowerCase();
+          let allMatch = locationTerms.every(term => locations.indexOf(term) !== -1);
+          if (!allMatch) return false;
+        }
+        return true;
+      });
+      renderAggregatedLevel(filtered);
+    } else {
+      let filtered = currentDataset.filter(record => {
+        let recordDate = new Date(record["rcd open dt/tm (gmt)"]);
+        if (startDateVal && recordDate < new Date(startDateVal)) return false;
+        if (endDateVal && recordDate > new Date(endDateVal)) return false;
+        if (!isNaN(minDuration) && record["timeusage"] < minDuration) return false;
+        if (!isNaN(maxDuration) && record["timeusage"] > maxDuration) return false;
+        if (cellTower && (!getValue(record, "mkt enodeb id") || getValue(record, "mkt enodeb id").toLowerCase().indexOf(cellTower) === -1)) return false;
+        if (callDirection && getValue(record, "calldirection") !== callDirection) return false;
+        if (searchMsisdn && (!getValue(record, "msisdn") || getValue(record, "msisdn").toLowerCase().indexOf(searchMsisdn) === -1)) return false;
+        // For record-level, check if the Search Value contains at least one of the location terms (if any)
+        if (locationTerms.length > 0) {
+          let value = (getValue(record, "search value") || "").toLowerCase();
+          let matchFound = locationTerms.some(term => value.indexOf(term) !== -1);
+          if (!matchFound) return false;
+        }
+        return true;
+      });
+      renderRecordLevel(filtered);
+    }
+  }
+
+  // Reset all filters and show the full dataset
+  function resetFilters() {
+    document.getElementById('startDate').value = '';
+    document.getElementById('endDate').value = '';
+    document.getElementById('minDuration').value = '';
+    document.getElementById('maxDuration').value = '';
+    document.getElementById('cellTower').value = '';
+    document.getElementById('callDirection').value = '';
+    document.getElementById('searchMsisdn').value = '';
+    document.getElementById('searchLocation').value = '';
+    document.getElementById('minTowers').value = '';
+    document.getElementById('maxTowers').value = '';
+    document.getElementById('groupByPhone').checked = false;
+    renderRecordLevel(currentDataset);
+  }
+
+  // Simple table sort function for columns by index
+  function sortTable(columnIndex) {
+    const tbody = document.querySelector('#resultTable tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort((a, b) => {
+      let valA = a.cells[columnIndex].innerText;
+      let valB = b.cells[columnIndex].innerText;
+      if (!isNaN(valA) && !isNaN(valB)) {
+        return parseFloat(valA) - parseFloat(valB);
+      }
+      return valA.localeCompare(valB);
+    });
+    tbody.innerHTML = rows.map(row => row.outerHTML).join('');
   }
 </script>
 </body>
