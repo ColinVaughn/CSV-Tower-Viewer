@@ -37,7 +37,7 @@
   <input type="number" id="maxDuration" placeholder="Max Duration">
 </div>
 <div class="filter-group">
-  <label for="cellTower">Cell Tower (Mkt Enodeb Id):</label>
+  <label for="cellTower">Cell Tower (Mkt Enodeb Id/eNB ID):</label>
   <input type="text" id="cellTower" placeholder="Enter Tower ID">
 </div>
 <div class="filter-group">
@@ -70,6 +70,8 @@
 </div>
 <button onclick="applyAdvancedFilters()">Apply Advanced Filters</button>
 <button onclick="resetFilters()">Reset Filters</button>
+<!-- New Export Button -->
+<button onclick="exportCSV()">Export Filtered CSV</button>
 
 <h2 id="tableTitle">Call Detail Analysis (Record Level)</h2>
 <table id="resultTable">
@@ -83,16 +85,52 @@
 
 <script>
   let currentDataset = [];
+  let currentFilteredDataset = []; // To store the filtered dataset
 
-  // Helper function to get a value by field name.
-  // If not found, for VOLTE files, try an alternative name: "volte <fieldName>"
-  function getValue(record, fieldName) {
-    if(record[fieldName]) return record[fieldName];
-    if(record.fileType === "volte") {
-      let alt = "volte " + fieldName;
-      if(record[alt]) return record[alt];
-    }
-    return '';
+  // Helper function: returns concatenated non-empty values for given alternative keys.
+  function getField(record, alternatives) {
+    let values = [];
+    alternatives.forEach(key => {
+      let k = key.trim().toLowerCase();
+      if(record[k] && record[k].toString().trim() !== "") {
+        if(values.indexOf(record[k].toString().trim()) === -1)
+          values.push(record[k].toString().trim());
+      }
+    });
+    return values.join(" / ");
+  }
+
+  // Helper for VOLTE extras
+  function getVolteExtras(record) {
+    let extras = [];
+    const fields = [
+      { label: "SID", keys: ["sid"] },
+      { label: "NID", keys: ["nid"] },
+      { label: "Cell Face", keys: ["cell face"] },
+      { label: "RAT", keys: ["rat"] },
+      { label: "ENDPOINT", keys: ["endpoint"] },
+      { label: "VZWNE/V4B", keys: ["vzwne/v4b"] }
+    ];
+    fields.forEach(f => {
+      let val = getField(record, f.keys);
+      if(val) extras.push(f.label + ": " + val);
+    });
+    return extras.join(" | ");
+  }
+
+  // Helper for VOCE offsets
+  function getVoceOffsets(record) {
+    let offsets = [];
+    const fields = [
+      { label: "Rcd Open Ts Offset", keys: ["rcd open ts offset"] },
+      { label: "RcdCloseTsOffset", keys: ["rcdclosetsoffset"] },
+      { label: "GMT Offset", keys: ["gmt offset"] }
+    ];
+    fields.forEach(f => {
+      let val = getField(record, f.keys);
+      if(val) offsets.push(f.label + ": " + val);
+    });
+    return offsets.join(" | ");
   }
 
   // Process selected CSV files with PapaParse
@@ -100,50 +138,74 @@
     const files = document.getElementById('csvFile').files;
     currentDataset = [];
     Array.from(files).forEach(file => {
-      // Determine file type from filename (VOLTE if filename includes "volte", else assume VCE)
-      let fileType = file.name.toLowerCase().includes("volte") ? "volte" : "vce";
+      // Determine file type based on filename
+      let fileType = file.name.toLowerCase().includes("volte") ? "volte" : "voci";
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
-        // Normalize header: trim and convert to lowercase
         transformHeader: header => header.trim().toLowerCase(),
         complete: function(results) {
           results.data.forEach(row => {
-            // Attach file type to each row
             row.fileType = fileType;
-            // Convert timeusage to number (assuming header "timeusage")
-            row.timeusage = parseInt(row["timeusage"], 10) || 0;
+            // For duration, try both "timeusage" and "sou"
+            row.timeusage = parseInt(row["timeusage"] || row["sou"], 10) || 0;
             currentDataset.push(row);
           });
+          // Initially, currentFilteredDataset is the full dataset
+          currentFilteredDataset = currentDataset.slice();
           renderRecordLevel(currentDataset);
         }
       });
     });
   }
 
-  // Render record-level table view
+  // Render record-level view
   function renderRecordLevel(dataset) {
     document.getElementById("tableTitle").innerText = "Call Detail Analysis (Record Level)";
-    // Include a File Type column in the header
     document.getElementById("tableHeader").innerHTML = `
       <th onclick="sortTable(0)">Msisdn</th>
       <th onclick="sortTable(1)">Search Value</th>
-      <th onclick="sortTable(2)">Rcd Open Dt/Tm (GMT)</th>
-      <th onclick="sortTable(3)">TIMEUsage</th>
-      <th onclick="sortTable(4)">CallDirection</th>
-      <th onclick="sortTable(5)">Mkt Enodeb Id</th>
-      <th onclick="sortTable(6)">File Type</th>
+      <th onclick="sortTable(2)">Search Start (GMT)</th>
+      <th onclick="sortTable(3)">Search End (GMT)</th>
+      <th onclick="sortTable(4)">Record Open Time</th>
+      <th onclick="sortTable(5)">Duration</th>
+      <th onclick="sortTable(6)">Call Direction</th>
+      <th onclick="sortTable(7)">Calling Party</th>
+      <th onclick="sortTable(8)">Called Party</th>
+      <th onclick="sortTable(9)">Primary Tower</th>
+      <th onclick="sortTable(10)">Cell ID</th>
+      <th onclick="sortTable(11)">Extras / Offsets</th>
+      <th onclick="sortTable(12)">File Type</th>
     `;
     const tbody = document.querySelector('#resultTable tbody');
     tbody.innerHTML = dataset.map(record => {
+      let msisdn = getField(record, ["msisdn", "volte msisdn"]);
+      let searchValue = getField(record, ["search value", "volte search value"]);
+      let searchStart = getField(record, ["search start (gmt)", "volte search start (gmt)"]);
+      let searchEnd = getField(record, ["search end (gmt)", "volte search end (gmt)"]);
+      let recordOpen = getField(record, ["rcd open dt/tm (gmt)", "record open dt/tm(gmt)", "record open date/time", "volte rcd open dt/tm(gmt)", "volte record open date/time"]);
+      let duration = record["timeusage"];
+      let callDir = getField(record, ["calldirection", "dir", "volte dir"]);
+      let callingParty = getField(record, ["calling party no", "cpn", "volte cpn", "volte calling party no"]);
+      let calledParty = getField(record, ["called prty addr", "called #", "volte called #", "volte called prty addr"]);
+      let primaryTower = getField(record, ["mkt enodeb id", "enb id", "market id", "volte enb id", "volte market id", "volte mkt enodeb id"]);
+      let cellId = getField(record, ["ani cell id", "cell id", "volte cell id", "volte ani cell id"]);
+      let extras = record.fileType === "volte" ? getVolteExtras(record) : getVoceOffsets(record);
+      let fileTypeLabel = record.fileType.toUpperCase();
       return `<tr>
-                <td>${ getValue(record, "msisdn") || '' }</td>
-                <td>${ getValue(record, "search value") || '' }</td>
-                <td>${ record["rcd open dt/tm (gmt)"] || '' }</td>
-                <td>${ record["timeusage"] }</td>
-                <td>${ getValue(record, "calldirection") || '' }</td>
-                <td>${ getValue(record, "mkt enodeb id") || '' }</td>
-                <td>${ record.fileType.toUpperCase() }</td>
+                <td>${msisdn || ''}</td>
+                <td>${searchValue || ''}</td>
+                <td>${searchStart || ''}</td>
+                <td>${searchEnd || ''}</td>
+                <td>${recordOpen || ''}</td>
+                <td>${duration}</td>
+                <td>${callDir || ''}</td>
+                <td>${callingParty || ''}</td>
+                <td>${calledParty || ''}</td>
+                <td>${primaryTower || ''}</td>
+                <td>${cellId || ''}</td>
+                <td>${extras || ''}</td>
+                <td>${fileTypeLabel}</td>
               </tr>`;
     }).join('');
   }
@@ -152,7 +214,7 @@
   function buildAggregatedDataset() {
     let aggregated = {};
     currentDataset.forEach(record => {
-      let phone = getValue(record, "msisdn");
+      let phone = getField(record, ["msisdn", "volte msisdn"]);
       if (!phone) return;
       if (!aggregated[phone]) {
         aggregated[phone] = {
@@ -163,12 +225,10 @@
           fileTypes: new Set()
         };
       }
-      if (getValue(record, "mkt enodeb id")) {
-        aggregated[phone].towers.add(getValue(record, "mkt enodeb id"));
-      }
-      if (getValue(record, "search value")) {
-        aggregated[phone].locations.add(getValue(record, "search value").toLowerCase().trim());
-      }
+      let towerVal = getField(record, ["mkt enodeb id", "enb id", "market id", "volte enb id", "volte market id", "volte mkt enodeb id"]);
+      if(towerVal) aggregated[phone].towers.add(towerVal);
+      let loc = getField(record, ["search value", "volte search value"]);
+      if(loc) aggregated[phone].locations.add(loc.toLowerCase().trim());
       aggregated[phone].totalDuration += record["timeusage"];
       aggregated[phone].fileTypes.add(record.fileType.toUpperCase());
     });
@@ -186,7 +246,7 @@
     return aggregatedArray;
   }
 
-  // Render aggregated (group by phone) view
+  // Render aggregated view
   function renderAggregatedLevel(dataset) {
     document.getElementById("tableTitle").innerText = "Call Detail Analysis (Aggregated by Phone)";
     document.getElementById("tableHeader").innerHTML = `
@@ -246,7 +306,6 @@
         if (!isNaN(minTowers) && record["Unique Towers"] < minTowers) return false;
         if (!isNaN(maxTowers) && record["Unique Towers"] > maxTowers) return false;
         if (searchMsisdn && record.Msisdn.toLowerCase().indexOf(searchMsisdn) === -1) return false;
-        // For aggregated search location filtering, require ALL terms to be found in the Locations field.
         if (locationTerms.length > 0) {
           let locations = record["Locations"].toLowerCase();
           let allMatch = locationTerms.every(term => locations.indexOf(term) !== -1);
@@ -254,30 +313,34 @@
         }
         return true;
       });
+      currentFilteredDataset = filtered;
       renderAggregatedLevel(filtered);
     } else {
       let filtered = currentDataset.filter(record => {
-        let recordDate = new Date(record["rcd open dt/tm (gmt)"]);
+        let recordDate = new Date(record["rcd open dt/tm (gmt)"] || record["record open dt/tm(gmt)"] || record["record open date/time"]);
         if (startDateVal && recordDate < new Date(startDateVal)) return false;
         if (endDateVal && recordDate > new Date(endDateVal)) return false;
         if (!isNaN(minDuration) && record["timeusage"] < minDuration) return false;
         if (!isNaN(maxDuration) && record["timeusage"] > maxDuration) return false;
-        if (cellTower && (!getValue(record, "mkt enodeb id") || getValue(record, "mkt enodeb id").toLowerCase().indexOf(cellTower) === -1)) return false;
-        if (callDirection && getValue(record, "calldirection") !== callDirection) return false;
-        if (searchMsisdn && (!getValue(record, "msisdn") || getValue(record, "msisdn").toLowerCase().indexOf(searchMsisdn) === -1)) return false;
-        // For record-level, check if the Search Value contains at least one of the location terms (if any)
+        if (cellTower && (!getField(record, ["mkt enodeb id", "enb id", "market id", "volte enb id", "volte market id", "volte mkt enodeb id"]) ||
+          getField(record, ["mkt enodeb id", "enb id", "market id", "volte enb id", "volte market id", "volte mkt enodeb id"]).toLowerCase().indexOf(cellTower) === -1))
+          return false;
+        if (callDirection && getField(record, ["calldirection", "dir", "volte dir"]) !== callDirection) return false;
+        if (searchMsisdn && (!getField(record, ["msisdn", "volte msisdn"]) || getField(record, ["msisdn", "volte msisdn"]).toLowerCase().indexOf(searchMsisdn) === -1))
+          return false;
         if (locationTerms.length > 0) {
-          let value = (getValue(record, "search value") || "").toLowerCase();
+          let value = (getField(record, ["search value", "volte search value"]) || "").toLowerCase();
           let matchFound = locationTerms.some(term => value.indexOf(term) !== -1);
           if (!matchFound) return false;
         }
         return true;
       });
+      currentFilteredDataset = filtered;
       renderRecordLevel(filtered);
     }
   }
 
-  // Reset all filters and show the full dataset
+  // Reset all filters and show full dataset
   function resetFilters() {
     document.getElementById('startDate').value = '';
     document.getElementById('endDate').value = '';
@@ -290,10 +353,32 @@
     document.getElementById('minTowers').value = '';
     document.getElementById('maxTowers').value = '';
     document.getElementById('groupByPhone').checked = false;
+    currentFilteredDataset = currentDataset.slice();
     renderRecordLevel(currentDataset);
   }
 
-  // Simple table sort function for columns by index
+  // Export the currentFilteredDataset as a CSV file
+  function exportCSV() {
+    if(!currentFilteredDataset || currentFilteredDataset.length === 0) {
+      alert("No data to export.");
+      return;
+    }
+    // Use Papa.unparse to convert JSON to CSV string.
+    let csv = Papa.unparse(currentFilteredDataset);
+    let blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
+    let link = document.createElement("a");
+    if (link.download !== undefined) { // feature detection
+      let url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", "filtered_data.csv");
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  }
+
+  // Simple sort function for table columns by index
   function sortTable(columnIndex) {
     const tbody = document.querySelector('#resultTable tbody');
     const rows = Array.from(tbody.querySelectorAll('tr'));
