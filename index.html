@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Advanced CSV Data Analyzer</title>
+  <title>Advanced CSV Data Analyzer with Scoring & Name Mapping</title>
   <!-- PapaParse for CSV parsing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <style>
@@ -13,9 +13,24 @@
       th { background-color: #f2f2f2; cursor: pointer; }
       input, select, button { margin: 5px 10px 5px 0; }
       .filter-group { margin: 10px 0; }
+      .name-mapping { border: 1px solid #ddd; padding: 10px; margin-bottom: 20px; }
   </style>
 </head>
 <body>
+<!-- Name Mapping Section Moved to the Top -->
+<div class="name-mapping">
+  <h3>Name Mapping</h3>
+  <div>
+    <input type="text" id="mapPhone" placeholder="Phone Number">
+    <input type="text" id="mapName" placeholder="Assign Name">
+    <button onclick="assignName()">Assign Name</button>
+  </div>
+  <div>
+    <button onclick="exportNameMapping()">Export Name Mapping CSV</button>
+    <input type="file" id="importMappingFile" accept=".csv" onchange="importNameMapping(event)">
+  </div>
+</div>
+
 <h2>Upload CSV Files</h2>
 <input type="file" id="csvFile" multiple accept=".csv">
 <button onclick="processFiles()">Process</button>
@@ -70,7 +85,7 @@
 </div>
 <button onclick="applyAdvancedFilters()">Apply Advanced Filters</button>
 <button onclick="resetFilters()">Reset Filters</button>
-<!-- New Export Button -->
+<!-- Export CSV for filtered call detail records -->
 <button onclick="exportCSV()">Export Filtered CSV</button>
 
 <h2 id="tableTitle">Call Detail Analysis (Record Level)</h2>
@@ -86,6 +101,7 @@
 <script>
   let currentDataset = [];
   let currentFilteredDataset = []; // To store the filtered dataset
+  let nameMapping = {}; // Global mapping for phone numbers to names
 
   // Helper function: returns concatenated non-empty values for given alternative keys.
   function getField(record, alternatives) {
@@ -131,6 +147,14 @@
       if(val) offsets.push(f.label + ": " + val);
     });
     return offsets.join(" | ");
+  }
+
+  // Compute a score based on total duration and unique towers.
+  // (For example, score = (duration in minutes) + (unique towers * 10))
+  function computeScore(record) {
+    let durationMinutes = record["Total Duration"] / 60;
+    let towersScore = record["Unique Towers"] * 10;
+    return Math.round(durationMinutes + towersScore);
   }
 
   // Process selected CSV files with PapaParse
@@ -210,7 +234,8 @@
     }).join('');
   }
 
-  // Build aggregated dataset by grouping records by Msisdn
+  // Build aggregated dataset by grouping records by Msisdn,
+  // and include Name and computed Score.
   function buildAggregatedDataset() {
     let aggregated = {};
     currentDataset.forEach(record => {
@@ -234,7 +259,7 @@
     });
     let aggregatedArray = Object.keys(aggregated).map(phone => {
       let data = aggregated[phone];
-      return {
+      let record = {
         Msisdn: phone,
         "Unique Towers": data.towers.size,
         "Tower IDs": Array.from(data.towers).join(', '),
@@ -242,30 +267,39 @@
         "Locations": Array.from(data.locations).join(', '),
         "File Type": Array.from(data.fileTypes).join(', ')
       };
+      // Merge assigned name if available
+      record["Name"] = nameMapping[phone] || '';
+      // Compute score based on your defined criteria
+      record["Score"] = computeScore(record);
+      return record;
     });
     return aggregatedArray;
   }
 
-  // Render aggregated view
+  // Render aggregated view (includes new columns Name & Score)
   function renderAggregatedLevel(dataset) {
     document.getElementById("tableTitle").innerText = "Call Detail Analysis (Aggregated by Phone)";
     document.getElementById("tableHeader").innerHTML = `
       <th onclick="sortTable(0)">Msisdn</th>
-      <th onclick="sortTable(1)">Unique Towers</th>
-      <th onclick="sortTable(2)">Tower IDs</th>
-      <th onclick="sortTable(3)">Total Duration</th>
-      <th onclick="sortTable(4)">Locations</th>
-      <th onclick="sortTable(5)">File Type</th>
+      <th onclick="sortTable(1)">Name</th>
+      <th onclick="sortTable(2)">Unique Towers</th>
+      <th onclick="sortTable(3)">Tower IDs</th>
+      <th onclick="sortTable(4)">Total Duration</th>
+      <th onclick="sortTable(5)">Locations</th>
+      <th onclick="sortTable(6)">File Type</th>
+      <th onclick="sortTable(7)">Score</th>
     `;
     const tbody = document.querySelector('#resultTable tbody');
     tbody.innerHTML = dataset.map(record => {
       return `<tr>
                 <td>${record.Msisdn || ''}</td>
+                <td>${record["Name"] || ''}</td>
                 <td>${record["Unique Towers"] || 0}</td>
                 <td>${record["Tower IDs"] || ''}</td>
                 <td>${record["Total Duration"]}</td>
                 <td>${record["Locations"] || ''}</td>
                 <td>${record["File Type"] || ''}</td>
+                <td>${record["Score"]}</td>
               </tr>`;
     }).join('');
   }
@@ -363,11 +397,10 @@
       alert("No data to export.");
       return;
     }
-    // Use Papa.unparse to convert JSON to CSV string.
     let csv = Papa.unparse(currentFilteredDataset);
     let blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
     let link = document.createElement("a");
-    if (link.download !== undefined) { // feature detection
+    if (link.download !== undefined) {
       let url = URL.createObjectURL(blob);
       link.setAttribute("href", url);
       link.setAttribute("download", "filtered_data.csv");
@@ -376,6 +409,67 @@
       link.click();
       document.body.removeChild(link);
     }
+  }
+
+  // Export the name mapping as a CSV file
+  function exportNameMapping() {
+    if(Object.keys(nameMapping).length === 0) {
+      alert("No name mappings available.");
+      return;
+    }
+    let mappingArray = Object.keys(nameMapping).map(phone => {
+      return { Msisdn: phone, Name: nameMapping[phone] };
+    });
+    let csv = Papa.unparse(mappingArray);
+    let blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
+    let link = document.createElement("a");
+    if (link.download !== undefined) {
+      let url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", "name_mapping.csv");
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  }
+
+  // Import a CSV file to update name mappings
+  function importNameMapping(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: function(results) {
+        results.data.forEach(row => {
+          if(row.Msisdn && row.Name) {
+            nameMapping[row.Msisdn.trim()] = row.Name.trim();
+          }
+        });
+        if(document.getElementById('groupByPhone').checked) {
+          renderAggregatedLevel(buildAggregatedDataset());
+        }
+        alert("Name mapping imported successfully.");
+      }
+    });
+  }
+
+  // Function to manually assign a name to a phone number.
+  function assignName() {
+    const phone = document.getElementById('mapPhone').value.trim();
+    const name = document.getElementById('mapName').value.trim();
+    if (!phone || !name) {
+      alert("Both phone number and name are required.");
+      return;
+    }
+    nameMapping[phone] = name;
+    document.getElementById('mapPhone').value = '';
+    document.getElementById('mapName').value = '';
+    if(document.getElementById('groupByPhone').checked) {
+      renderAggregatedLevel(buildAggregatedDataset());
+    }
+    alert("Name assigned successfully.");
   }
 
   // Simple sort function for table columns by index
