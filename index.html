@@ -259,6 +259,79 @@
                 </div>
               </div>
             </div>
+
+            <div class="mt-3" id="dataSessionFilters" style="display: none;">
+              <h6>Data Session Filters</h6>
+              <div class="row">
+                <div class="col-md-3">
+                  <label for="dsStartDate">Start Date:</label>
+                  <input type="datetime-local" class="form-control" id="dsStartDate">
+                </div>
+                <div class="col-md-3">
+                  <label for="dsEndDate">End Date:</label>
+                  <input type="datetime-local" class="form-control" id="dsEndDate">
+                </div>
+                <div class="col-md-3">
+                  <label for="dsTowerId">Tower ID:</label>
+                  <input type="text" class="form-control" id="dsTowerId" placeholder="Enter Tower ID">
+                </div>
+                <div class="col-md-3">
+                  <label for="dsCellId">Cell ID:</label>
+                  <input type="text" class="form-control" id="dsCellId" placeholder="Enter Cell ID">
+                </div>
+              </div>
+              <div class="row mt-2">
+                <div class="col-md-3">
+                  <label for="dsMinDuration">Min Duration (s):</label>
+                  <input type="number" class="form-control" id="dsMinDuration" placeholder="Min Duration">
+                </div>
+                <div class="col-md-3">
+                  <label for="dsMaxDuration">Max Duration (s):</label>
+                  <input type="number" class="form-control" id="dsMaxDuration" placeholder="Max Duration">
+                </div>
+                <div class="col-md-3">
+                  <label for="dsIpAddress">IP Address:</label>
+                  <input type="text" class="form-control" id="dsIpAddress" placeholder="IP Address">
+                </div>
+                <div class="col-md-3">
+                  <label for="dsNatIpAddress">NAT IP Address:</label>
+                  <input type="text" class="form-control" id="dsNatIpAddress" placeholder="NAT IP Address">
+                </div>
+              </div>
+              <div class="row mt-2">
+                <div class="col-md-3">
+                  <label for="dsTechnology">Network Technology:</label>
+                  <select class="form-select" id="dsTechnology">
+                    <option value="">Any</option>
+                    <option value="4g">4G</option>
+                    <option value="5g">5G</option>
+                    <option value="lte">LTE</option>
+                    <option value="nr">NR</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label for="dsLocation">Location/Address:</label>
+                  <input type="text" class="form-control" id="dsLocation" placeholder="Enter location or address">
+                </div>
+                <div class="col-md-3">
+                  <label for="dsMinDataVolume">Min Data Volume (KB):</label>
+                  <input type="number" class="form-control" id="dsMinDataVolume" placeholder="Min KB">
+                </div>
+                <div class="col-md-3">
+                  <label for="dsMaxDataVolume">Max Data Volume (KB):</label>
+                  <input type="number" class="form-control" id="dsMaxDataVolume" placeholder="Max KB">
+                </div>
+              </div>
+              <div class="row mt-2">
+                <div class="col-md-3">
+                  <label for="dsPortAllocTime">Port Alloc Date/Time:</label>
+                  <input type="text" class="form-control" id="dsPortAllocTime" placeholder="Enter port alloc time">
+                </div>
+                <div class="col-md-9">
+                  <!-- Placeholder for future filters -->
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -365,6 +438,7 @@
   let nameMapping = {}; // Global mapping for phone numbers to names
   let dataTypeDefinitions = {}; // To store data type definitions
   let detectedDataTypes = new Set(); // Currently detected data types
+  let currentFields; // To store current fields for dynamic filtering
 
   // Initialize with built-in data types
   function initializeDataTypes() {
@@ -390,7 +464,7 @@
     // Text Messages data type
     dataTypeDefinitions.text = {
       name: "Text Messages",
-      identifier: "sms|text|mms|message",
+      identifier: "sms|text|mms|message|textdetail",
       fields: [
         { name: "Message Time", keys: ["messagearrival", "record date/time", "submission date/time"], type: "date" },
         { name: "Message Type", keys: ["network element name"], type: "text" },
@@ -425,7 +499,7 @@
     // Account Info data type
     dataTypeDefinitions.account = {
       name: "Account Information",
-      identifier: "account|actdeact|subscriber",
+      identifier: "account|actdeact|subscriber|ssn",
       fields: [
         { name: "Msisdn", keys: ["search value", "mtn"], type: "text" },
         { name: "Account Number", keys: ["account number"], type: "text" },
@@ -448,6 +522,28 @@
         { name: "Payment Method", keys: ["payment method"], type: "text" },
         { name: "Payment Source", keys: ["payment source"], type: "text" },
         { name: "Payment Status", keys: ["payment status"], type: "text" }
+      ]
+    };
+
+    // Data Session/Cell Site data type
+    dataTypeDefinitions.datasession = {
+      name: "Data Session Records",
+      identifier: "cellsites|cell-sites|data_sessions|data sessions|4g|5g|tdr|ip|p-bdr",
+      fields: [
+        { name: "MSISDN", keys: ["msisdn", "phone", "phonenumber", "number", "device_number", "calling_number"], type: "text" },
+        { name: "Session Start", keys: ["session_start", "start_time", "starttime", "session_date", "date", "start_date"], type: "date" },
+        { name: "Session End", keys: ["session_end", "end_time", "endtime", "end_date"], type: "date" },
+        { name: "Duration", keys: ["duration", "session_duration", "time", "seconds"], type: "number" },
+        { name: "Cell ID", keys: ["cell_id", "cellid", "cell", "sector", "sector_id", "sectorid"], type: "text" },
+        { name: "Tower ID", keys: ["tower_id", "towerid", "tower", "site_id", "siteid"], type: "text" },
+        { name: "Sector", keys: ["sector", "cell_sector", "sectorid", "sector_id"], type: "text" },
+        { name: "Data Volume", keys: ["data_volume", "volume", "data_usage", "usage", "bytes", "kb", "mb", "data"], type: "number" },
+        { name: "IP Address", keys: ["ip", "ip_address", "ipaddress", "mbl_ip", "mbl_ip_addr", "mbl ip addr"], type: "text" },
+        { name: "NAT IP Address", keys: ["nat_ip", "nat_ip_address", "nat ipaddress", "nat ip addr", "ext_ip"], type: "text" },
+        { name: "IMEI", keys: ["imei", "device_id", "deviceid", "equipment_id"], type: "text" },
+        { name: "Location", keys: ["location", "cell_location", "tower_location", "site_location"], type: "text" },
+        { name: "Technology", keys: ["technology", "tech", "network_type", "networktype", "service_type"], type: "text" },
+        { name: "Port Alloc Date/Time", keys: ["port_alloc_date_time", "port_alloc_date", "port allocation date/time", "port_allocation_date", "port alloc"], type: "date" }
       ]
     };
 
@@ -516,17 +612,55 @@
     return newField;
   }
 
-  // Helper function: returns concatenated non-empty values for given alternative keys.
-  function getField(record, alternatives) {
-    let values = [];
-    alternatives.forEach(key => {
-      let k = key.trim().toLowerCase();
-      if(record[k] && record[k].toString().trim() !== "") {
-        if(values.indexOf(record[k].toString().trim()) === -1)
-          values.push(record[k].toString().trim());
+  // Helper function to get field value from a record using multiple possible keys
+  function getField(record, possibleKeys) {
+    // Check for exact key matches first
+    for (const key of possibleKeys) {
+      if (record[key] !== undefined && record[key] !== null && record[key] !== "") {
+        return record[key];
       }
-    });
-    return values.join(" / ");
+    }
+    
+    // If no exact match, try case-insensitive matching with special handling for NAT vs non-NAT fields
+    const recordKeys = Object.keys(record);
+    
+    for (const key of possibleKeys) {
+      const keyLower = key.toLowerCase();
+      
+      // Special handling for IP address fields to prevent overlap
+      if (keyLower === "mbl ip addr" || keyLower === "ip address" || keyLower === "ip addr") {
+        // When looking for regular IP address, exclude NAT fields
+        for (const recordKey of recordKeys) {
+          const recordKeyLower = recordKey.toLowerCase();
+          if ((recordKeyLower.includes(keyLower) || keyLower.includes(recordKeyLower)) && 
+              !recordKeyLower.includes("nat")) {
+            return record[recordKey];
+          }
+        }
+      } 
+      else if (keyLower === "mbl ip addr nat" || keyLower === "nat ip address" || keyLower.includes("nat")) {
+        // When looking for NAT IP address, only include NAT fields
+        for (const recordKey of recordKeys) {
+          const recordKeyLower = recordKey.toLowerCase();
+          if (recordKeyLower.includes("nat") && 
+              (recordKeyLower.includes("ip") || recordKeyLower.includes("address"))) {
+            return record[recordKey];
+          }
+        }
+      }
+      else {
+        // Standard fuzzy matching for non-IP fields
+        for (const recordKey of recordKeys) {
+          const recordKeyLower = recordKey.toLowerCase();
+          if (recordKeyLower.includes(keyLower) || keyLower.includes(recordKeyLower)) {
+            return record[recordKey];
+          }
+        }
+      }
+    }
+    
+    // If still no match, return empty string
+    return "";
   }
 
   // Helper for VOLTE extras
@@ -562,34 +696,90 @@
     return offsets.join(" | ");
   }
 
-  // Detect file type based on filename and header
+  // Detect file type based on filename and header with improved pattern matching
   function detectFileType(fileName, headers) {
+    // Convert headers to lowercase for case-insensitive matching
+    const lowerHeaders = headers.map(h => h.toLowerCase());
+    
+    console.log("Detecting file type for:", fileName);
+    console.log("Available headers:", lowerHeaders);
+    
+    // Special case for P-BDR data session files
+    if (fileName.toLowerCase().includes('p-bdr') && 
+        (fileName.toLowerCase().includes('data_sessions') || 
+         fileName.toLowerCase().includes('4g') || 
+         fileName.toLowerCase().includes('5g'))) {
+      console.log("Special case detected: P-BDR data session file");
+      return 'datasession';
+    }
+    
     // First try to match based on file name
     for (const [key, definition] of Object.entries(dataTypeDefinitions)) {
       const regex = new RegExp(definition.identifier, 'i');
       if (regex.test(fileName)) {
+        console.log(`File type matched by name pattern: ${key} (${definition.name})`);
         return key;
       }
     }
     
     // If no match by filename, try to match by headers
+    const matchScores = {};
+    
     for (const [key, definition] of Object.entries(dataTypeDefinitions)) {
-      // Count how many field keys match headers
       let matchCount = 0;
+      let totalKeyCount = 0;
+      
       definition.fields.forEach(field => {
-        field.keys.forEach(key => {
-          if (headers.includes(key.toLowerCase())) {
-            matchCount++;
+        field.keys.forEach(fieldKey => {
+          totalKeyCount++;
+          // Try exact match first
+          if (lowerHeaders.includes(fieldKey.toLowerCase())) {
+            matchCount += 2; // Give higher weight to exact matches
+          } else {
+            // Try partial/fuzzy matching
+            for (const header of lowerHeaders) {
+              if (header.includes(fieldKey.toLowerCase()) || 
+                  fieldKey.toLowerCase().includes(header)) {
+                matchCount += 1;
+                break;
+              }
+            }
           }
         });
       });
       
-      // If more than 30% of the fields match, consider it a match
-      if (matchCount > definition.fields.length * 0.3) {
-        return key;
+      // Calculate match score as percentage of possible matches
+      const score = (matchCount / (totalKeyCount * 2)) * 100;
+      matchScores[key] = score;
+      console.log(`Match score for ${key}: ${score.toFixed(2)}%`);
+    }
+    
+    // Find data type with highest match score
+    let bestMatch = null;
+    let bestScore = 20; // Threshold percentage - at least 20% match required
+    
+    for (const [key, score] of Object.entries(matchScores)) {
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = key;
       }
     }
     
+    if (bestMatch) {
+      console.log(`Best match by headers: ${bestMatch} (${dataTypeDefinitions[bestMatch].name}) with score ${bestScore.toFixed(2)}%`);
+      return bestMatch;
+    }
+    
+    // Special case for cell site/data session files
+    if (fileName.toLowerCase().includes('cellsites') || 
+        fileName.toLowerCase().includes('data_sessions') ||
+        (fileName.toLowerCase().includes('4g') && fileName.toLowerCase().includes('session')) ||
+        (fileName.toLowerCase().includes('5g') && fileName.toLowerCase().includes('session')) ||
+        fileName.toLowerCase().includes('tdr')) {
+      return 'datasession';
+    }
+    
+    console.log("No match found, returning unknown");
     return 'unknown';
   }
 
@@ -599,40 +789,6 @@
     let durationMinutes = record["Total Duration"] / 60;
     let towersScore = record["Unique Towers"] * 10;
     return Math.round(durationMinutes + towersScore);
-  }
-
-  // Helper function to process Excel files
-  function processExcelFile(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        try {
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-          
-          // Convert Excel data to match our format
-          const headers = jsonData[0].map(h => h && h.toString ? h.toString().trim().toLowerCase() : '');
-          const rows = jsonData.slice(1).map(row => {
-            const obj = {};
-            headers.forEach((header, index) => {
-              if (header) {
-                obj[header] = row[index] !== undefined ? (row[index] !== null ? row[index].toString() : '') : '';
-              }
-            });
-            return obj;
-          });
-          
-          resolve({ headers, rows });
-        } catch (error) {
-          reject(error);
-        }
-      };
-      reader.onerror = reject;
-      reader.readAsArrayBuffer(file);
-    });
   }
 
   // Process selected files (CSV and Excel)
@@ -752,6 +908,7 @@
     document.getElementById('callDataFilters').style.display = detectedDataTypes.has('call') ? 'block' : 'none';
     document.getElementById('messageDataFilters').style.display = detectedDataTypes.has('text') ? 'block' : 'none';
     document.getElementById('deviceDataFilters').style.display = detectedDataTypes.has('device') ? 'block' : 'none';
+    document.getElementById('dataSessionFilters').style.display = detectedDataTypes.has('datasession') ? 'block' : 'none';
   }
 
   // Render data based on data types
@@ -805,17 +962,53 @@
 
   // Render data based on data type
   function renderDataByType(dataset, dataType) {
+    console.log(`Rendering data for type: ${dataType}`);
+    console.log(`Sample record:`, dataset.length > 0 ? dataset[0] : 'No records');
+    
     if (!dataTypeDefinitions[dataType]) {
       console.error(`Data type definition not found for: ${dataType}`);
-      return;
+      return renderGenericTable(dataset);
     }
     
     const definition = dataTypeDefinitions[dataType];
     document.getElementById("tableTitle").innerText = `${definition.name} (${dataset.length} records)`;
     
-    // Create table header based on the data type definition
-    const headerHtml = definition.fields.map((field, index) => 
-      `<th onclick="sortTable(${index})">${field.name}</th>`
+    // Collect all fields present in the dataset that aren't in the definition
+    let additionalFields = new Set();
+    dataset.forEach(record => {
+      Object.keys(record).forEach(key => {
+        if (key !== 'fileType' && !definition.fields.some(field => field.keys.includes(key.toLowerCase()))) {
+          // Check if this key isn't already captured by fuzzy matching
+          let matched = false;
+          for (const field of definition.fields) {
+            if (getField(record, field.keys) === record[key]) {
+              matched = true;
+              break;
+            }
+          }
+          if (!matched) {
+            additionalFields.add(key);
+          }
+        }
+      });
+    });
+    
+    // Combine predefined fields with additional fields
+    const allFields = [...definition.fields];
+    additionalFields.forEach(field => {
+      // Create a field definition for each additional field
+      const fieldName = field.charAt(0).toUpperCase() + field.slice(1).replace(/_/g, ' ');
+      allFields.push({ 
+        name: fieldName, 
+        keys: [field], 
+        type: guessFieldType(dataset, field),
+        isDynamic: true // Mark as dynamically discovered
+      });
+    });
+    
+    // Create table header based on the all fields
+    const headerHtml = allFields.map((field, index) => 
+      `<th onclick="sortTable(${index})" ${field.isDynamic ? 'class="bg-light"' : ''}>${field.name}</th>`
     ).join('');
     
     document.getElementById("tableHeader").innerHTML = headerHtml;
@@ -823,152 +1016,127 @@
     // Render table body
     const tbody = document.querySelector('#resultTable tbody');
     tbody.innerHTML = dataset.map(record => {
-      const cells = definition.fields.map(field => {
-        const value = getField(record, field.keys);
+      const cells = allFields.map(field => {
+        let value;
+        if (field.isDynamic) {
+          // For dynamic fields, directly access the record
+          value = record[field.keys[0]];
+        } else {
+          // For predefined fields, use getField for fuzzy matching
+          value = getField(record, field.keys);
+        }
         return `<td>${formatValue(value, field.type)}</td>`;
       }).join('');
       
       return `<tr>${cells}</tr>`;
     }).join('');
-  }
-
-  // Render for call records (original view)
-  function renderRecordLevel(dataset) {
-    if (detectedDataTypes.has('call')) {
-      renderDataByType(dataset, 'call');
-    } else {
-      // Fallback to generic rendering if no call data
-      renderGenericTable(dataset);
-    }
-  }
-
-  // Generic table render for unknown data types
-  function renderGenericTable(dataset) {
-    if (dataset.length === 0) {
-      document.getElementById("tableTitle").innerText = "No data available";
-      document.getElementById("tableHeader").innerHTML = "";
-      document.querySelector('#resultTable tbody').innerHTML = "";
-      return;
-    }
     
-    // Get all unique column names from the dataset
-    const allColumns = new Set();
-    dataset.forEach(record => {
-      Object.keys(record).forEach(key => {
-        if (key !== 'fileType') {
-          allColumns.add(key);
+    // Store the current fields for dynamic filtering
+    currentFields = allFields;
+    
+    // Update dynamic filters
+    updateDynamicFilters(dataType, allFields);
+  }
+
+  // Guess the field type based on values
+  function guessFieldType(dataset, field) {
+    // Sample a few records to determine type
+    let dateCount = 0;
+    let numberCount = 0;
+    let total = 0;
+    
+    // Check up to 20 records
+    const sampleSize = Math.min(20, dataset.length);
+    for (let i = 0; i < sampleSize; i++) {
+      if (dataset[i] && dataset[i][field]) {
+        total++;
+        const value = dataset[i][field];
+        
+        // Check if it looks like a date
+        if (value.includes('-') && value.includes(':') || 
+            /^\d{1,4}[-./]\d{1,2}[-./]\d{1,4}/.test(value) ||
+            !isNaN(Date.parse(value))) {
+          dateCount++;
         }
-      });
-    });
+        // Check if it's a number
+        else if (!isNaN(parseFloat(value)) && isFinite(value)) {
+          numberCount++;
+        }
+      }
+    }
     
-    const columns = Array.from(allColumns);
+    // Determine type based on majority
+    if (total > 0) {
+      if (dateCount / total > 0.7) return 'date';
+      if (numberCount / total > 0.7) return 'number';
+    }
     
-    // Create header
-    document.getElementById("tableTitle").innerText = `Data Analysis (${dataset.length} records)`;
-    document.getElementById("tableHeader").innerHTML = columns.map((column, index) => 
-      `<th onclick="sortTable(${index})">${column}</th>`
-    ).join('');
-    
-    // Create table rows
-    const tbody = document.querySelector('#resultTable tbody');
-    tbody.innerHTML = dataset.map(record => {
-      return `<tr>
-        ${columns.map(column => `<td>${record[column] || ''}</td>`).join('')}
-      </tr>`;
-    }).join('');
+    return 'text'; // Default to text
   }
 
-  // Build aggregated dataset by grouping records by Msisdn,
-  // and include Name and computed Score.
-  function buildAggregatedDataset() {
-    let aggregated = {};
+  // Update dynamic filters based on current data type and fields
+  function updateDynamicFilters(dataType, fields) {
+    const dynamicFiltersContainer = document.getElementById('dynamicFilters');
+    dynamicFiltersContainer.innerHTML = '';
     
-    // Only process records with call data
-    const callRecords = currentFilteredDataset.filter(record => record.fileType === 'call');
+    // Only create dynamic filters for additional fields
+    const dynamicFields = fields.filter(field => field.isDynamic);
+    if (dynamicFields.length === 0) return;
     
-    callRecords.forEach(record => {
-      let phone = getField(record, ["msisdn", "volte msisdn"]);
-      if (!phone) return;
-      
-      if (!aggregated[phone]) {
-        aggregated[phone] = {
-          phone: phone,
-          towers: new Set(),
-          totalDuration: 0,
-          locations: new Set(),
-          fileTypes: new Set()
-        };
+    // Create dynamic filter section
+    const section = document.createElement('div');
+    section.className = 'mt-3';
+    section.id = 'additionalFilters';
+    
+    const header = document.createElement('h6');
+    header.textContent = 'Additional Fields Filters';
+    section.appendChild(header);
+    
+    // Create filters in rows of 3
+    let currentRow;
+    
+    dynamicFields.forEach((field, index) => {
+      if (index % 3 === 0) {
+        currentRow = document.createElement('div');
+        currentRow.className = 'row mt-2';
+        section.appendChild(currentRow);
       }
       
-      let towerVal = getField(record, ["mkt enodeb id", "enb id", "market id", "volte enb id", "volte market id", "volte mkt enodeb id"]);
-      if(towerVal) aggregated[phone].towers.add(towerVal);
+      const col = document.createElement('div');
+      col.className = 'col-md-4';
       
-      let loc = getField(record, ["search value", "volte search value"]);
-      if(loc) aggregated[phone].locations.add(loc.toLowerCase().trim());
+      const label = document.createElement('label');
+      label.setAttribute('for', `dynamicFilter_${field.keys[0]}`);
+      label.textContent = field.name + ':';
       
-      aggregated[phone].totalDuration += record["timeusage"] || 0;
-      aggregated[phone].fileTypes.add(record.fileType.toUpperCase());
+      let input;
+      
+      if (field.type === 'date') {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'form-control';
+        input.id = `dynamicFilter_${field.keys[0]}`;
+        input.placeholder = 'Enter date or part of date';
+      } else if (field.type === 'number') {
+        input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'form-control';
+        input.id = `dynamicFilter_${field.keys[0]}`;
+        input.placeholder = 'Enter number';
+      } else {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'form-control';
+        input.id = `dynamicFilter_${field.keys[0]}`;
+        input.placeholder = `Enter ${field.name}`;
+      }
+      
+      col.appendChild(label);
+      col.appendChild(input);
+      currentRow.appendChild(col);
     });
     
-    let aggregatedArray = Object.keys(aggregated).map(phone => {
-      let data = aggregated[phone];
-      let record = {
-        Msisdn: phone,
-        "Unique Towers": data.towers.size,
-        "Tower IDs": Array.from(data.towers).join(', '),
-        "Total Duration": data.totalDuration,
-        "Locations": Array.from(data.locations).join(', '),
-        "File Type": Array.from(data.fileTypes).join(', ')
-      };
-      
-      // Merge assigned name if available
-      record["Name"] = nameMapping[phone] || '';
-      
-      // Compute score based on your defined criteria
-      record["Score"] = computeScore(record);
-      
-      return record;
-    });
-    
-    return aggregatedArray;
-  }
-
-  // Render aggregated view (includes new columns Name & Score)
-  function renderAggregatedLevel(dataset) {
-    document.getElementById("tableTitle").innerText = `Call Detail Analysis (Aggregated by Phone - ${dataset.length} records)`;
-    document.getElementById("tableHeader").innerHTML = `
-      <th onclick="sortTable(0)">Msisdn</th>
-      <th onclick="sortTable(1)">Name</th>
-      <th onclick="sortTable(2)">Unique Towers</th>
-      <th onclick="sortTable(3)">Tower IDs</th>
-      <th onclick="sortTable(4)">Total Duration</th>
-      <th onclick="sortTable(5)">Locations</th>
-      <th onclick="sortTable(6)">File Type</th>
-      <th onclick="sortTable(7)">Score</th>
-    `;
-    
-    const tbody = document.querySelector('#resultTable tbody');
-    tbody.innerHTML = dataset.map(record => {
-      return `<tr>
-                <td>${record.Msisdn || ''}</td>
-                <td>${record["Name"] || ''}</td>
-                <td>${record["Unique Towers"] || 0}</td>
-                <td>${record["Tower IDs"] || ''}</td>
-                <td>${formatValue(record["Total Duration"], 'number')}</td>
-                <td>${record["Locations"] || ''}</td>
-                <td>${record["File Type"] || ''}</td>
-                <td>${record["Score"]}</td>
-              </tr>`;
-    }).join('');
-  }
-
-  // Basic search on table text
-  function searchTable() {
-    const query = document.getElementById('searchBox').value.toLowerCase();
-    const rows = document.querySelectorAll('#resultTable tbody tr');
-    rows.forEach(row => {
-      row.style.display = row.innerText.toLowerCase().includes(query) ? '' : 'none';
-    });
+    dynamicFiltersContainer.appendChild(section);
   }
 
   // Apply advanced filters based on input fields and data types
@@ -1004,178 +1172,353 @@
       filtered = applyDeviceFilters(filtered);
     }
     
+    if (activeType === 'all' || activeType === 'datasession') {
+      filtered = applyDataSessionFilters(filtered);
+    }
+    
+    // Apply dynamic filters for any additional fields
+    filtered = applyDynamicFilters(filtered);
+    
     // Update currentFilteredDataset and render
     currentFilteredDataset = filtered;
     renderData();
   }
-  
+
   // Apply call record specific filters
   function applyCallFilters(records) {
-    let startDateVal = document.getElementById('startDate').value;
-    let endDateVal = document.getElementById('endDate').value;
-    let minDuration = parseInt(document.getElementById('minDuration').value, 10);
-    let maxDuration = parseInt(document.getElementById('maxDuration').value, 10);
-    let cellTower = document.getElementById('cellTower').value.toLowerCase();
-    let callDirection = document.getElementById('callDirection').value;
-    let searchMsisdn = document.getElementById('searchMsisdn').value.toLowerCase();
-    let searchLocationInput = document.getElementById('searchLocation').value.trim();
-    let minTowers = parseInt(document.getElementById('minTowers').value, 10);
-    let maxTowers = parseInt(document.getElementById('maxTowers').value, 10);
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    const minDuration = document.getElementById('minDuration').value;
+    const maxDuration = document.getElementById('maxDuration').value;
+    const cellTower = document.getElementById('cellTower').value.toLowerCase();
+    const callDirection = document.getElementById('callDirection').value;
+    const searchMsisdn = document.getElementById('searchMsisdn').value.toLowerCase();
+    const searchLocation = document.getElementById('searchLocation').value.toLowerCase();
+    const minTowers = document.getElementById('minTowers').value;
+    const maxTowers = document.getElementById('maxTowers').value;
     
-    // If none of these filters are set, return unchanged
-    if (!startDateVal && !endDateVal && isNaN(minDuration) && isNaN(maxDuration) && 
-        !cellTower && !callDirection && !searchMsisdn && !searchLocationInput && 
-        isNaN(minTowers) && isNaN(maxTowers)) {
-      return records;
-    }
-    
-    // Process location search terms
-    let locationTerms = [];
-    if (searchLocationInput) {
-      locationTerms = searchLocationInput.split(',')
-        .map(term => term.trim().toLowerCase())
-        .filter(term => term.length > 0);
-    }
-    
-    // Only filter records that are call type
     return records.filter(record => {
-      // Skip non-call records
       if (record.fileType !== 'call') return true;
       
-      try {
-        let recordDate = new Date(record["rcd open dt/tm (gmt)"] || record["record open dt/tm(gmt)"] || record["record open date/time"]);
-        if (startDateVal && recordDate < new Date(startDateVal)) return false;
-        if (endDateVal && recordDate > new Date(endDateVal)) return false;
-        if (!isNaN(minDuration) && record["timeusage"] < minDuration) return false;
-        if (!isNaN(maxDuration) && record["timeusage"] > maxDuration) return false;
-        
-        if (cellTower) {
-          const towerValue = getField(record, ["mkt enodeb id", "enb id", "market id", "volte enb id", "volte market id", "volte mkt enodeb id"]);
-          if (!towerValue || !towerValue.toLowerCase().includes(cellTower)) return false;
-        }
-        
-        if (callDirection) {
-          const direction = getField(record, ["calldirection", "dir", "volte dir"]);
-          if (direction !== callDirection) return false;
-        }
-        
-        if (searchMsisdn) {
-          const msisdn = getField(record, ["msisdn", "volte msisdn"]);
-          if (!msisdn || !msisdn.toLowerCase().includes(searchMsisdn)) return false;
-        }
-        
-        if (locationTerms.length > 0) {
-          const value = (getField(record, ["search value", "volte search value"]) || "").toLowerCase();
-          const matchFound = locationTerms.some(term => value.includes(term));
-          if (!matchFound) return false;
-        }
-        
-        return true;
-      } catch (e) {
-        console.error("Error filtering record:", e);
-        return true;
+      // Date range filter
+      if (startDate && getField(record, ['calldate', 'date', 'datetime', 'call_date', 'start_date', 'start']) &&
+          new Date(getField(record, ['calldate', 'date', 'datetime', 'call_date', 'start_date', 'start'])) < new Date(startDate)) {
+        return false;
       }
+      
+      if (endDate && getField(record, ['calldate', 'date', 'datetime', 'call_date', 'start_date', 'start']) &&
+          new Date(getField(record, ['calldate', 'date', 'datetime', 'call_date', 'start_date', 'start'])) > new Date(endDate)) {
+        return false;
+      }
+      
+      // Duration filters
+      const duration = parseInt(getField(record, ['duration', 'timeusage', 'time', 'calltime', 'sou', 'seconds']), 10);
+      if (minDuration && (!duration || duration < parseInt(minDuration, 10))) {
+        return false;
+      }
+      
+      if (maxDuration && duration > parseInt(maxDuration, 10)) {
+        return false;
+      }
+      
+      // Cell tower filter
+      if (cellTower) {
+        const towerValue = getField(record, ['celltower', 'tower', 'cell', 'cell_id', 'cellid', 'cgis', 'cgi']).toString().toLowerCase();
+        if (!towerValue.includes(cellTower)) {
+          return false;
+        }
+      }
+      
+      // Call direction filter
+      if (callDirection && callDirection !== 'all') {
+        const direction = getField(record, ['direction', 'call_direction', 'calldir', 'dir', 'inout', 'in_out']).toString().toLowerCase();
+        if ((callDirection === 'outgoing' && !['outgoing', 'out', 'o', 'mo'].includes(direction)) ||
+            (callDirection === 'incoming' && !['incoming', 'in', 'i', 'mt'].includes(direction))) {
+          return false;
+        }
+      }
+      
+      // MSISDN search
+      if (searchMsisdn) {
+        const msisdn = getField(record, ['msisdn', 'phone', 'phonenumber', 'number', 'callingnumber', 'callednumber', 'a_party', 'b_party']).toString().toLowerCase();
+        if (!msisdn.includes(searchMsisdn)) {
+          return false;
+        }
+      }
+      
+      // Location search
+      if (searchLocation) {
+        const location = getField(record, ['location', 'celllocation', 'cell_location', 'tower_location', 'area']).toString().toLowerCase();
+        if (!location.includes(searchLocation)) {
+          return false;
+        }
+      }
+      
+      // Tower count filters
+      const towers = getField(record, ['tower_count', 'towers', 'cells', 'cell_count']);
+      if (minTowers && (!towers || parseInt(towers, 10) < parseInt(minTowers, 10))) {
+        return false;
+      }
+      
+      if (maxTowers && parseInt(towers, 10) > parseInt(maxTowers, 10)) {
+        return false;
+      }
+      
+      return true;
     });
   }
-  
+
   // Apply message record specific filters
   function applyMessageFilters(records) {
-    let startDateVal = document.getElementById('msgStartDate').value;
-    let endDateVal = document.getElementById('msgEndDate').value;
-    let msgType = document.getElementById('msgType').value.toLowerCase();
-    let msgDirection = document.getElementById('msgDirection').value;
-    let msgContent = document.getElementById('msgContent').value.toLowerCase();
-    let msgSender = document.getElementById('msgSender').value.toLowerCase();
-    let msgRecipient = document.getElementById('msgRecipient').value.toLowerCase();
+    const startDate = document.getElementById('msgStartDate').value;
+    const endDate = document.getElementById('msgEndDate').value;
+    const msgType = document.getElementById('msgType').value;
+    const msgDirection = document.getElementById('msgDirection').value;
+    const msgContent = document.getElementById('msgContent').value.toLowerCase();
+    const msgSender = document.getElementById('msgSender').value.toLowerCase();
+    const msgRecipient = document.getElementById('msgRecipient').value.toLowerCase();
     
-    // If none of these filters are set, return unchanged
-    if (!startDateVal && !endDateVal && !msgType && !msgDirection && 
-        !msgContent && !msgSender && !msgRecipient) {
-      return records;
-    }
-    
-    // Only filter records that are text type
     return records.filter(record => {
-      // Skip non-message records
       if (record.fileType !== 'text') return true;
       
-      try {
-        let recordDate = new Date(getField(record, ["messagearrival", "record date/time", "submission date/time"]));
-        if (startDateVal && recordDate < new Date(startDateVal)) return false;
-        if (endDateVal && recordDate > new Date(endDateVal)) return false;
-        
-        if (msgType) {
-          const type = getField(record, ["network element name"]).toLowerCase();
-          if (msgType === 'sms' && type.includes('mms')) return false;
-          if (msgType === 'mms' && !type.includes('mms')) return false;
-        }
-        
-        if (msgDirection) {
-          const direction = getField(record, ["charge information"]);
-          if (msgDirection === 'MO' && !direction.includes('MO')) return false;
-          if (msgDirection === 'MT' && !direction.includes('MT')) return false;
-        }
-        
-        if (msgContent) {
-          const content = getField(record, ["messagecontent"]).toLowerCase();
-          if (!content.includes(msgContent)) return false;
-        }
-        
-        if (msgSender) {
-          const sender = getField(record, ["originator address", "originatingmdn"]).toLowerCase();
-          if (!sender.includes(msgSender)) return false;
-        }
-        
-        if (msgRecipient) {
-          const recipient = getField(record, ["recipient address", "recipient addresses", "terminatingmdn"]).toLowerCase();
-          if (!recipient.includes(msgRecipient)) return false;
-        }
-        
-        return true;
-      } catch (e) {
-        console.error("Error filtering message record:", e);
-        return true;
+      // Date range filter
+      if (startDate && getField(record, ['date', 'msgdate', 'datetime', 'message_date', 'time', 'timestamp']) &&
+          new Date(getField(record, ['date', 'msgdate', 'datetime', 'message_date', 'time', 'timestamp'])) < new Date(startDate)) {
+        return false;
       }
+      
+      if (endDate && getField(record, ['date', 'msgdate', 'datetime', 'message_date', 'time', 'timestamp']) &&
+          new Date(getField(record, ['date', 'msgdate', 'datetime', 'message_date', 'time', 'timestamp'])) > new Date(endDate)) {
+        return false;
+      }
+      
+      // Message type filter
+      if (msgType && msgType !== 'all') {
+        const type = getField(record, ['type', 'msgtype', 'message_type', 'msg_type']).toString().toLowerCase();
+        if (type !== msgType.toLowerCase()) {
+          return false;
+        }
+      }
+      
+      // Message direction filter
+      if (msgDirection && msgDirection !== 'all') {
+        const direction = getField(record, ['direction', 'msg_direction', 'inout', 'in_out']).toString().toLowerCase();
+        if ((msgDirection === 'outgoing' && !['outgoing', 'out', 'o', 'mo'].includes(direction)) ||
+            (msgDirection === 'incoming' && !['incoming', 'in', 'i', 'mt'].includes(direction))) {
+          return false;
+        }
+      }
+      
+      // Message content search
+      if (msgContent) {
+        const content = getField(record, ['content', 'body', 'message', 'text', 'msg_body']).toString().toLowerCase();
+        if (!content.includes(msgContent)) {
+          return false;
+        }
+      }
+      
+      // Sender search
+      if (msgSender) {
+        const sender = getField(record, ['sender', 'from', 'source', 'a_party']).toString().toLowerCase();
+        if (!sender.includes(msgSender)) {
+          return false;
+        }
+      }
+      
+      // Recipient search
+      if (msgRecipient) {
+        const recipient = getField(record, ['recipient', 'to', 'destination', 'b_party']).toString().toLowerCase();
+        if (!recipient.includes(msgRecipient)) {
+          return false;
+        }
+      }
+      
+      return true;
     });
   }
-  
+
   // Apply device record specific filters
   function applyDeviceFilters(records) {
-    let deviceId = document.getElementById('deviceId').value.toLowerCase();
-    let deviceType = document.getElementById('deviceType').value.toLowerCase();
-    let deviceMfg = document.getElementById('deviceMfg').value.toLowerCase();
+    const deviceId = document.getElementById('deviceId').value.toLowerCase();
+    const deviceType = document.getElementById('deviceType').value.toLowerCase();
+    const deviceMfg = document.getElementById('deviceMfg').value.toLowerCase();
     
-    // If none of these filters are set, return unchanged
-    if (!deviceId && !deviceType && !deviceMfg) {
-      return records;
-    }
-    
-    // Only filter records that are device type
     return records.filter(record => {
-      // Skip non-device records
       if (record.fileType !== 'device') return true;
       
-      try {
-        if (deviceId) {
-          const id = getField(record, ["device_id", "imei"]).toLowerCase();
-          if (!id.includes(deviceId)) return false;
+      // Device ID filter
+      if (deviceId) {
+        const id = getField(record, ['id', 'deviceid', 'device_id', 'imei', 'imsi', 'serialnumber', 'serial']).toString().toLowerCase();
+        if (!id.includes(deviceId)) {
+          return false;
         }
-        
-        if (deviceType) {
-          const type = getField(record, ["device_type"]).toLowerCase();
-          if (!type.includes(deviceType)) return false;
-        }
-        
-        if (deviceMfg) {
-          const mfg = getField(record, ["mfg_name"]).toLowerCase();
-          if (!mfg.includes(deviceMfg)) return false;
-        }
-        
-        return true;
-      } catch (e) {
-        console.error("Error filtering device record:", e);
-        return true;
       }
+      
+      // Device type filter
+      if (deviceType) {
+        const type = getField(record, ['type', 'devicetype', 'device_type', 'model']).toString().toLowerCase();
+        if (!type.includes(deviceType)) {
+          return false;
+        }
+      }
+      
+      // Manufacturer filter
+      if (deviceMfg) {
+        const manufacturer = getField(record, ['manufacturer', 'mfg', 'make', 'vendor', 'brand']).toString().toLowerCase();
+        if (!manufacturer.includes(deviceMfg)) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+  }
+
+  // Apply data session specific filters
+  function applyDataSessionFilters(records) {
+    const startDate = document.getElementById('dsStartDate').value;
+    const endDate = document.getElementById('dsEndDate').value;
+    const towerId = document.getElementById('dsTowerId').value.toLowerCase();
+    const cellId = document.getElementById('dsCellId').value.toLowerCase();
+    const minDuration = document.getElementById('dsMinDuration').value;
+    const maxDuration = document.getElementById('dsMaxDuration').value;
+    const ipAddress = document.getElementById('dsIpAddress').value.toLowerCase();
+    const natIpAddress = document.getElementById('dsNatIpAddress').value.toLowerCase();
+    const technology = document.getElementById('dsTechnology').value.toLowerCase();
+    const location = document.getElementById('dsLocation').value.toLowerCase();
+    const minDataVolume = document.getElementById('dsMinDataVolume').value;
+    const maxDataVolume = document.getElementById('dsMaxDataVolume').value;
+    const portAllocTime = document.getElementById('dsPortAllocTime').value;
+    
+    return records.filter(record => {
+      if (record.fileType !== 'datasession') return true;
+      
+      // Session start date filter
+      if (startDate && getField(record, ['session_start', 'start_time', 'starttime', 'session_date', 'date', 'start_date']) &&
+          new Date(getField(record, ['session_start', 'start_time', 'starttime', 'session_date', 'date', 'start_date'])) < new Date(startDate)) {
+        return false;
+      }
+      
+      // Session end date filter
+      if (endDate && getField(record, ['session_end', 'end_time', 'endtime', 'end_date']) &&
+          new Date(getField(record, ['session_end', 'end_time', 'endtime', 'end_date'])) > new Date(endDate)) {
+        return false;
+      }
+      
+      // Tower ID filter
+      if (towerId) {
+        const tower = getField(record, ['tower_id', 'towerid', 'tower', 'site_id', 'siteid']).toString().toLowerCase();
+        if (!tower.includes(towerId)) {
+          return false;
+        }
+      }
+      
+      // Cell ID filter
+      if (cellId) {
+        const cell = getField(record, ['cell_id', 'cellid', 'cell', 'sector', 'sector_id', 'sectorid']).toString().toLowerCase();
+        if (!cell.includes(cellId)) {
+          return false;
+        }
+      }
+      
+      // Duration filters
+      const duration = parseInt(getField(record, ['duration', 'session_duration']), 10);
+      if (minDuration && (!duration || duration < parseInt(minDuration, 10))) {
+        return false;
+      }
+      
+      if (maxDuration && duration > parseInt(maxDuration, 10)) {
+        return false;
+      }
+      
+      // IP Address filter
+      if (ipAddress) {
+        const ip = getField(record, ['ip', 'ip_address', 'ipaddress', 'mbl_ip', 'mbl_ip_addr', 'mbl ip addr']).toString().toLowerCase();
+        if (!ip.includes(ipAddress)) {
+          return false;
+        }
+      }
+      
+      // NAT IP Address filter
+      if (natIpAddress) {
+        const natIp = getField(record, ['nat_ip', 'nat_ip_address', 'nat ipaddress', 'nat ip addr', 'ext_ip']).toString().toLowerCase();
+        if (!natIp.includes(natIpAddress)) {
+          return false;
+        }
+      }
+      
+      // Technology filter
+      if (technology) {
+        const tech = getField(record, ['technology', 'tech', 'network_type', 'networktype']).toString().toLowerCase();
+        if (!tech.includes(technology)) {
+          return false;
+        }
+      }
+      
+      // Location filter
+      if (location) {
+        const loc = getField(record, ['location', 'cell_location', 'tower_location', 'site_location']).toString().toLowerCase();
+        if (!loc.includes(location)) {
+          return false;
+        }
+      }
+      
+      // Data volume filters
+      const dataVolume = parseFloat(getField(record, ['data_volume', 'volume', 'data_usage', 'usage', 'bytes']));
+      if (minDataVolume && (!dataVolume || dataVolume < parseFloat(minDataVolume))) {
+        return false;
+      }
+      
+      if (maxDataVolume && dataVolume > parseFloat(maxDataVolume)) {
+        return false;
+      }
+      
+      // Port allocation time filter
+      if (portAllocTime && getField(record, ['port_alloc_date_time', 'port_alloc_date', 'port allocation date/time', 'port_allocation_date']) &&
+          !getField(record, ['port_alloc_date_time', 'port_alloc_date', 'port allocation date/time', 'port_allocation_date']).toString().toLowerCase().includes(portAllocTime.toLowerCase())) {
+        return false;
+      }
+      
+      return true;
+    });
+  }
+
+  // Apply dynamic filters for additional fields
+  function applyDynamicFilters(records) {
+    if (!currentFields) return records;
+    
+    const dynamicFields = currentFields.filter(field => field.isDynamic);
+    if (dynamicFields.length === 0) return records;
+    
+    return records.filter(record => {
+      for (const field of dynamicFields) {
+        const filterInput = document.getElementById(`dynamicFilter_${field.keys[0]}`);
+        if (!filterInput || !filterInput.value) continue;
+        
+        const filterValue = filterInput.value.toLowerCase();
+        const fieldValue = record[field.keys[0]];
+        
+        if (!fieldValue) return false;
+        
+        if (field.type === 'number') {
+          const numValue = parseFloat(fieldValue);
+          const filterNum = parseFloat(filterValue);
+          if (isNaN(numValue) || isNaN(filterNum) || numValue !== filterNum) {
+            return false;
+          }
+        } else if (field.type === 'date') {
+          // Simple date partial matching
+          if (!fieldValue.toString().toLowerCase().includes(filterValue)) {
+            return false;
+          }
+        } else {
+          // Text field
+          if (!fieldValue.toString().toLowerCase().includes(filterValue)) {
+            return false;
+          }
+        }
+      }
+      return true;
     });
   }
 
@@ -1208,6 +1551,28 @@
     document.getElementById('deviceType').value = '';
     document.getElementById('deviceMfg').value = '';
     
+    // Reset data session filters
+    document.getElementById('dsStartDate').value = '';
+    document.getElementById('dsEndDate').value = '';
+    document.getElementById('dsTowerId').value = '';
+    document.getElementById('dsCellId').value = '';
+    document.getElementById('dsMinDuration').value = '';
+    document.getElementById('dsMaxDuration').value = '';
+    document.getElementById('dsIpAddress').value = '';
+    document.getElementById('dsNatIpAddress').value = '';
+    document.getElementById('dsTechnology').value = '';
+    document.getElementById('dsLocation').value = '';
+    document.getElementById('dsMinDataVolume').value = '';
+    document.getElementById('dsMaxDataVolume').value = '';
+    document.getElementById('dsPortAllocTime').value = '';
+    
+    // Reset dynamic filters
+    const dynamicFiltersContainer = document.getElementById('dynamicFilters');
+    if (dynamicFiltersContainer) {
+      const inputs = dynamicFiltersContainer.querySelectorAll('input, select');
+      inputs.forEach(input => input.value = '');
+    }
+    
     // Reset general search
     document.getElementById('searchBox').value = '';
     document.getElementById('activeDataType').value = 'all';
@@ -1215,104 +1580,6 @@
     // Reset and render
     currentFilteredDataset = currentDataset.slice();
     renderData();
-  }
-
-  // Export the currentFilteredDataset as a CSV file
-  function exportCSV() {
-    if(!currentFilteredDataset || currentFilteredDataset.length === 0) {
-      alert("No data to export.");
-      return;
-    }
-    let csv = Papa.unparse(currentFilteredDataset);
-    let blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
-    let link = document.createElement("a");
-    if (link.download !== undefined) {
-      let url = URL.createObjectURL(blob);
-      link.setAttribute("href", url);
-      link.setAttribute("download", "filtered_data.csv");
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  }
-
-  // Export the name mapping as a CSV file
-  function exportNameMapping() {
-    if(Object.keys(nameMapping).length === 0) {
-      alert("No name mappings available.");
-      return;
-    }
-    let mappingArray = Object.keys(nameMapping).map(phone => {
-      return { Msisdn: phone, Name: nameMapping[phone] };
-    });
-    let csv = Papa.unparse(mappingArray);
-    let blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
-    let link = document.createElement("a");
-    if (link.download !== undefined) {
-      let url = URL.createObjectURL(blob);
-      link.setAttribute("href", url);
-      link.setAttribute("download", "name_mapping.csv");
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  }
-
-  // Import a CSV file to update name mappings
-  function importNameMapping(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: function(results) {
-        results.data.forEach(row => {
-          if(row.Msisdn && row.Name) {
-            nameMapping[row.Msisdn.trim()] = row.Name.trim();
-          }
-        });
-        if(document.getElementById('groupByPhone').checked) {
-          renderAggregatedLevel(buildAggregatedDataset());
-        }
-        alert("Name mapping imported successfully.");
-      }
-    });
-  }
-
-  // Function to manually assign a name to a phone number.
-  function assignName() {
-    const phone = document.getElementById('mapPhone').value.trim();
-    const name = document.getElementById('mapName').value.trim();
-    if (!phone || !name) {
-      alert("Both phone number and name are required.");
-      return;
-    }
-    nameMapping[phone] = name;
-    document.getElementById('mapPhone').value = '';
-    document.getElementById('mapName').value = '';
-    if(document.getElementById('groupByPhone').checked) {
-      renderAggregatedLevel(buildAggregatedDataset());
-    } else {
-      renderData(); // Refresh any view to show the updated name
-    }
-    alert("Name assigned successfully.");
-  }
-
-  // Simple sort function for table columns by index
-  function sortTable(columnIndex) {
-    const tbody = document.querySelector('#resultTable tbody');
-    const rows = Array.from(tbody.querySelectorAll('tr'));
-    rows.sort((a, b) => {
-      let valA = a.cells[columnIndex].innerText;
-      let valB = b.cells[columnIndex].innerText;
-      if (!isNaN(valA) && !isNaN(valB)) {
-        return parseFloat(valA) - parseFloat(valB);
-      }
-      return valA.localeCompare(valB);
-    });
-    tbody.innerHTML = rows.map(row => row.outerHTML).join('');
   }
 
   // Data Type Configuration Functions
@@ -1519,6 +1786,55 @@
   
   // Start the application when the DOM is loaded
   document.addEventListener('DOMContentLoaded', initializeApp);
+
+  // Helper function to process Excel files
+  function processExcelFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          
+          // Get the first sheet
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          
+          // Convert to JSON with header row
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false, defval: "" });
+          
+          // Extract headers (column names)
+          // First, get the range of the sheet
+          const range = XLSX.utils.decode_range(worksheet['!ref']);
+          const headers = [];
+          
+          // Extract header row (assuming it's the first row)
+          for (let C = range.s.c; C <= range.e.c; ++C) {
+            const cellAddress = XLSX.utils.encode_cell({ r: range.s.r, c: C });
+            const cell = worksheet[cellAddress];
+            if (cell && cell.v) {
+              // Clean and normalize headers
+              let header = cell.v.toString().trim().toLowerCase();
+              headers.push(header);
+            }
+          }
+          
+          console.log("Excel file processed with headers:", headers);
+          console.log("Sample data:", jsonData.length > 0 ? jsonData[0] : "No data");
+          
+          resolve({ headers, rows: jsonData });
+        } catch (error) {
+          console.error("Error processing Excel file:", error);
+          reject(error);
+        }
+      };
+      reader.onerror = function(error) {
+        console.error("Error reading file:", error);
+        reject(error);
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
 </script>
 </body>
 </html>
