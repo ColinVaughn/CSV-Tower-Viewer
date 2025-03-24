@@ -3,9 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tower Data Viewer</title>
+  <title>Telecom Data Analyzer</title>
   <!-- PapaParse for CSV parsing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <!-- SheetJS for Excel parsing -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <!-- Add Bootstrap for better styling -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <style>
       body { font-family: Arial, sans-serif; margin: 20px; }
       table { width: 100%; border-collapse: collapse; margin-top: 20px; }
@@ -14,94 +19,502 @@
       input, select, button { margin: 5px 10px 5px 0; }
       .filter-group { margin: 10px 0; }
       .name-mapping { border: 1px solid #ddd; padding: 10px; margin-bottom: 20px; }
+      .nav-tabs { margin-bottom: 20px; }
+      .tab-content { padding: 20px 0; }
+      .data-type-config { border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 5px; }
+      .field-mapping { margin-bottom: 10px; }
+      .dropdown-menu { max-height: 300px; overflow-y: auto; }
   </style>
 </head>
 <body>
-<!-- Name Mapping Section Moved to the Top -->
-<div class="name-mapping">
-  <h3>Name Mapping</h3>
-  <div>
-    <input type="text" id="mapPhone" placeholder="Phone Number">
-    <input type="text" id="mapName" placeholder="Assign Name">
-    <button onclick="assignName()">Assign Name</button>
+<div class="container-fluid">
+  <!-- Main Tabs -->
+  <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="viewer-tab" data-bs-toggle="tab" data-bs-target="#viewer" type="button" role="tab">Data Viewer</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="config-tab" data-bs-toggle="tab" data-bs-target="#config" type="button" role="tab">Data Type Configuration</button>
+    </li>
+  </ul>
+
+  <div class="tab-content" id="mainTabsContent">
+    <!-- Data Viewer Tab -->
+    <div class="tab-pane fade show active" id="viewer" role="tabpanel" aria-labelledby="viewer-tab">
+      <!-- Name Mapping Section Moved to the Top -->
+      <div class="card mb-3">
+        <div class="card-header">
+          <h5>Name Mapping</h5>
+        </div>
+        <div class="card-body">
+          <div class="row mb-2">
+            <div class="col-md-4">
+              <input type="text" class="form-control" id="mapPhone" placeholder="Phone Number">
+            </div>
+            <div class="col-md-4">
+              <input type="text" class="form-control" id="mapName" placeholder="Assign Name">
+            </div>
+            <div class="col-md-4">
+              <button class="btn btn-primary" onclick="assignName()">Assign Name</button>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6">
+              <button class="btn btn-secondary" onclick="exportNameMapping()">Export Name Mapping CSV</button>
+            </div>
+            <div class="col-md-6">
+              <div class="input-group">
+                <input type="file" class="form-control" id="importMappingFile" accept=".csv" onchange="importNameMapping(event)">
+                <label class="input-group-text" for="importMappingFile">Import Mapping</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header">
+          <h5>Upload Files</h5>
+        </div>
+        <div class="card-body">
+          <div class="row mb-2">
+            <div class="col-md-6">
+              <input type="file" class="form-control" id="csvFile" multiple accept=".csv,.xlsx,.xls">
+            </div>
+            <div class="col-md-3">
+              <button class="btn btn-primary" onclick="processFiles()">Process Files</button>
+            </div>
+            <div class="col-md-3">
+              <select class="form-select" id="fileTypeSelector">
+                <option value="auto">Auto-detect File Type</option>
+                <option value="call">Call Records</option>
+                <option value="text">Text/MMS Records</option>
+                <option value="device">Device Info</option>
+                <option value="payment">Payment Records</option>
+                <option value="account">Account Info</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div id="fileTypeDetection" class="alert alert-info" style="display: none;">
+            File type detected: <span id="detectedFileType"></span>
+            <button class="btn btn-sm btn-outline-primary ms-3" id="createTypeBtn" style="display: none;">Create Custom Type</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between">
+          <h5>Search & Filters</h5>
+          <div>
+            <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#searchCollapse">
+              Toggle Search Panel
+            </button>
+          </div>
+        </div>
+        <div class="collapse show" id="searchCollapse">
+          <div class="card-body">
+            <div class="row mb-2">
+              <div class="col-md-6">
+                <input type="text" class="form-control" id="searchBox" placeholder="Search by any text" oninput="searchTable()">
+              </div>
+              <div class="col-md-3">
+                <select class="form-select" id="activeDataType">
+                  <option value="all">All Data Types</option>
+                  <!-- Will be populated dynamically -->
+                </select>
+              </div>
+              <div class="col-md-3">
+                <div class="btn-group" role="group">
+                  <button class="btn btn-outline-primary" onclick="applyAdvancedFilters()">Apply Filters</button>
+                  <button class="btn btn-outline-secondary" onclick="resetFilters()">Reset</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="dynamicFilters">
+              <!-- Dynamic filter UI will be inserted here based on file type -->
+            </div>
+
+            <div class="mt-3" id="callDataFilters">
+              <h6>Call Record Filters</h6>
+              <div class="row">
+                <div class="col-md-3">
+                  <label for="startDate">Start Date:</label>
+                  <input type="datetime-local" class="form-control" id="startDate">
+                </div>
+                <div class="col-md-3">
+                  <label for="endDate">End Date:</label>
+                  <input type="datetime-local" class="form-control" id="endDate">
+                </div>
+                <div class="col-md-3">
+                  <label for="minDuration">Min Duration (s):</label>
+                  <input type="number" class="form-control" id="minDuration" placeholder="Min Duration">
+                </div>
+                <div class="col-md-3">
+                  <label for="maxDuration">Max Duration (s):</label>
+                  <input type="number" class="form-control" id="maxDuration" placeholder="Max Duration">
+                </div>
+              </div>
+              <div class="row mt-2">
+                <div class="col-md-3">
+                  <label for="cellTower">Cell Tower ID:</label>
+                  <input type="text" class="form-control" id="cellTower" placeholder="Enter Tower ID">
+                </div>
+                <div class="col-md-3">
+                  <label for="callDirection">Call Direction:</label>
+                  <select class="form-select" id="callDirection">
+                    <option value="">Any</option>
+                    <option value="incoming">Incoming</option>
+                    <option value="outgoing">Outgoing</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label for="searchMsisdn">Msisdn Search:</label>
+                  <input type="text" class="form-control" id="searchMsisdn" placeholder="Enter Phone Number">
+                </div>
+                <div class="col-md-3">
+                  <label for="searchLocation">Search Location:</label>
+                  <input type="text" class="form-control" id="searchLocation" placeholder="e.g., Address, Location">
+                </div>
+              </div>
+              <div class="row mt-2">
+                <div class="col-md-3">
+                  <label for="minTowers">Min Towers:</label>
+                  <input type="number" class="form-control" id="minTowers" placeholder="Min Towers">
+                </div>
+                <div class="col-md-3">
+                  <label for="maxTowers">Max Towers:</label>
+                  <input type="number" class="form-control" id="maxTowers" placeholder="Max Towers">
+                </div>
+                <div class="col-md-6 mt-4">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="groupByPhone">
+                    <label class="form-check-label" for="groupByPhone">
+                      Group by Phone (Aggregate Towers & Locations)
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-3" id="messageDataFilters" style="display: none;">
+              <h6>Message Record Filters</h6>
+              <div class="row">
+                <div class="col-md-3">
+                  <label for="msgStartDate">Start Date:</label>
+                  <input type="datetime-local" class="form-control" id="msgStartDate">
+                </div>
+                <div class="col-md-3">
+                  <label for="msgEndDate">End Date:</label>
+                  <input type="datetime-local" class="form-control" id="msgEndDate">
+                </div>
+                <div class="col-md-3">
+                  <label for="msgType">Message Type:</label>
+                  <select class="form-select" id="msgType">
+                    <option value="">Any</option>
+                    <option value="sms">SMS</option>
+                    <option value="mms">MMS</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label for="msgDirection">Direction:</label>
+                  <select class="form-select" id="msgDirection">
+                    <option value="">Any</option>
+                    <option value="MO">Outgoing (MO)</option>
+                    <option value="MT">Incoming (MT)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="row mt-2">
+                <div class="col-md-6">
+                  <label for="msgContent">Message Content:</label>
+                  <input type="text" class="form-control" id="msgContent" placeholder="Search message content">
+                </div>
+                <div class="col-md-3">
+                  <label for="msgSender">Sender:</label>
+                  <input type="text" class="form-control" id="msgSender" placeholder="Sender phone/address">
+                </div>
+                <div class="col-md-3">
+                  <label for="msgRecipient">Recipient:</label>
+                  <input type="text" class="form-control" id="msgRecipient" placeholder="Recipient phone/address">
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-3" id="deviceDataFilters" style="display: none;">
+              <h6>Device Info Filters</h6>
+              <div class="row">
+                <div class="col-md-4">
+                  <label for="deviceId">Device ID/IMEI:</label>
+                  <input type="text" class="form-control" id="deviceId" placeholder="Device ID or IMEI">
+                </div>
+                <div class="col-md-4">
+                  <label for="deviceType">Device Type:</label>
+                  <input type="text" class="form-control" id="deviceType" placeholder="Device type">
+                </div>
+                <div class="col-md-4">
+                  <label for="deviceMfg">Manufacturer:</label>
+                  <input type="text" class="form-control" id="deviceMfg" placeholder="Manufacturer name">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header d-flex justify-content-between">
+          <h5 id="tableTitle">Data Analysis</h5>
+          <div>
+            <button class="btn btn-sm btn-success" onclick="exportCSV()">Export Filtered CSV</button>
+          </div>
+        </div>
+        <div class="card-body table-responsive">
+          <table id="resultTable" class="table table-striped table-hover">
+            <thead>
+              <tr id="tableHeader">
+                <!-- Header content will be set dynamically -->
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data Type Configuration Tab -->
+    <div class="tab-pane fade" id="config" role="tabpanel" aria-labelledby="config-tab">
+      <div class="card">
+        <div class="card-header">
+          <h5>Data Type Definitions</h5>
+        </div>
+        <div class="card-body">
+          <div class="row mb-3">
+            <div class="col-md-4">
+              <select class="form-select" id="dataTypeSelector">
+                <option value="">-- Select Data Type --</option>
+                <option value="new">Create New Data Type</option>
+                <!-- Will be populated dynamically -->
+              </select>
+            </div>
+            <div class="col-md-8">
+              <div class="btn-group" role="group">
+                <button class="btn btn-primary" id="editDataTypeBtn" disabled>Edit</button>
+                <button class="btn btn-success" id="saveDataTypeBtn">Save</button>
+                <button class="btn btn-danger" id="deleteDataTypeBtn" disabled>Delete</button>
+                <button class="btn btn-secondary" id="exportDataTypesBtn">Export Definitions</button>
+                <input type="file" id="importDataTypesFile" accept=".json" style="display: none;" onchange="importDataTypeDefinitions(event)">
+                <button class="btn btn-info" onclick="document.getElementById('importDataTypesFile').click()">Import Definitions</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="dataTypeConfig" class="data-type-config">
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <label for="dtName">Data Type Name:</label>
+                <input type="text" class="form-control" id="dtName" placeholder="e.g., Call Records, Text Messages">
+              </div>
+              <div class="col-md-6">
+                <label for="dtIdentifier">File Identifier Pattern:</label>
+                <input type="text" class="form-control" id="dtIdentifier" placeholder="e.g., VOLTE, TextDetail, Payment">
+              </div>
+            </div>
+
+            <h6>Field Definitions</h6>
+            <div id="fieldDefinitions">
+              <!-- Field definition template -->
+              <div class="field-mapping template" style="display: none;">
+                <div class="row">
+                  <div class="col-md-3">
+                    <input type="text" class="form-control field-name" placeholder="Display Name">
+                  </div>
+                  <div class="col-md-5">
+                    <input type="text" class="form-control field-keys" placeholder="Possible column names (comma separated)">
+                  </div>
+                  <div class="col-md-2">
+                    <select class="form-control field-type">
+                      <option value="text">Text</option>
+                      <option value="number">Number</option>
+                      <option value="date">Date</option>
+                      <option value="boolean">Boolean</option>
+                    </select>
+                  </div>
+                  <div class="col-md-2">
+                    <div class="btn-group btn-group-sm" role="group">
+                      <button class="btn btn-sm btn-danger remove-field">Remove</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button class="btn btn-outline-primary mt-3" id="addFieldBtn">Add Field</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
-  <div>
-    <button onclick="exportNameMapping()">Export Name Mapping CSV</button>
-    <input type="file" id="importMappingFile" accept=".csv" onchange="importNameMapping(event)">
-  </div>
 </div>
-
-<h2>Upload CSV Files</h2>
-<input type="file" id="csvFile" multiple accept=".csv">
-<button onclick="processFiles()">Process</button>
-
-<h3>Basic Search</h3>
-<input type="text" id="searchBox" placeholder="Search by any text" onkeyup="searchTable()">
-
-<h3>Advanced Filters</h3>
-<div class="filter-group">
-  <label for="startDate">Start Date:</label>
-  <input type="datetime-local" id="startDate">
-  <label for="endDate">End Date:</label>
-  <input type="datetime-local" id="endDate">
-</div>
-<div class="filter-group">
-  <label for="minDuration">Min Duration (s):</label>
-  <input type="number" id="minDuration" placeholder="Min Duration">
-  <label for="maxDuration">Max Duration (s):</label>
-  <input type="number" id="maxDuration" placeholder="Max Duration">
-</div>
-<div class="filter-group">
-  <label for="cellTower">Cell Tower (Mkt Enodeb Id/eNB ID):</label>
-  <input type="text" id="cellTower" placeholder="Enter Tower ID">
-</div>
-<div class="filter-group">
-  <label for="callDirection">Call Direction:</label>
-  <select id="callDirection">
-    <option value="">Any</option>
-    <option value="incoming">Incoming</option>
-    <option value="outgoing">Outgoing</option>
-  </select>
-</div>
-<div class="filter-group">
-  <label for="searchMsisdn">Msisdn Search:</label>
-  <input type="text" id="searchMsisdn" placeholder="Enter Phone Number">
-</div>
-<div class="filter-group">
-  <label for="searchLocation">Search Location:</label>
-  <input type="text" id="searchLocation" placeholder="e.g., 2130 Highway 102, 748 Main Street">
-</div>
-<div class="filter-group">
-  <label for="minTowers">Min Towers:</label>
-  <input type="number" id="minTowers" placeholder="Min Towers">
-  <label for="maxTowers">Max Towers:</label>
-  <input type="number" id="maxTowers" placeholder="Max Towers">
-</div>
-<div class="filter-group">
-  <label>
-    <input type="checkbox" id="groupByPhone">
-    Group by Phone (Aggregate Towers & Locations)
-  </label>
-</div>
-<button onclick="applyAdvancedFilters()">Apply Advanced Filters</button>
-<button onclick="resetFilters()">Reset Filters</button>
-<!-- Export CSV for filtered call detail records -->
-<button onclick="exportCSV()">Export Filtered CSV</button>
-
-<h2 id="tableTitle">Call Detail Analysis (Record Level)</h2>
-<table id="resultTable">
-  <thead>
-  <tr id="tableHeader">
-    <!-- Header content will be set dynamically -->
-  </tr>
-  </thead>
-  <tbody></tbody>
-</table>
 
 <script>
+  // Global variables
   let currentDataset = [];
   let currentFilteredDataset = []; // To store the filtered dataset
   let nameMapping = {}; // Global mapping for phone numbers to names
+  let dataTypeDefinitions = {}; // To store data type definitions
+  let detectedDataTypes = new Set(); // Currently detected data types
+
+  // Initialize with built-in data types
+  function initializeDataTypes() {
+    // Call Records data type
+    dataTypeDefinitions.call = {
+      name: "Call Records",
+      identifier: "volte|voci|call|cdr",
+      fields: [
+        { name: "Msisdn", keys: ["msisdn", "volte msisdn"], type: "text" },
+        { name: "Search Value", keys: ["search value", "volte search value"], type: "text" },
+        { name: "Search Start", keys: ["search start (gmt)", "volte search start (gmt)"], type: "date" },
+        { name: "Search End", keys: ["search end (gmt)", "volte search end (gmt)"], type: "date" },
+        { name: "Record Open Time", keys: ["rcd open dt/tm (gmt)", "record open dt/tm(gmt)", "record open date/time", "volte rcd open dt/tm(gmt)", "volte record open date/time"], type: "date" },
+        { name: "Duration", keys: ["timeusage", "sou"], type: "number" },
+        { name: "Call Direction", keys: ["calldirection", "dir", "volte dir"], type: "text" },
+        { name: "Calling Party", keys: ["calling party no", "cpn", "volte cpn", "volte calling party no"], type: "text" },
+        { name: "Called Party", keys: ["called prty addr", "called #", "volte called #", "volte called prty addr"], type: "text" },
+        { name: "Primary Tower", keys: ["mkt enodeb id", "enb id", "market id", "volte enb id", "volte market id", "volte mkt enodeb id"], type: "text" },
+        { name: "Cell ID", keys: ["ani cell id", "cell id", "volte cell id", "volte ani cell id"], type: "text" }
+      ]
+    };
+
+    // Text Messages data type
+    dataTypeDefinitions.text = {
+      name: "Text Messages",
+      identifier: "sms|text|mms|message",
+      fields: [
+        { name: "Message Time", keys: ["messagearrival", "record date/time", "submission date/time"], type: "date" },
+        { name: "Message Type", keys: ["network element name"], type: "text" },
+        { name: "Direction", keys: ["charge information"], type: "text" },
+        { name: "Sender", keys: ["originator address", "originatingmdn"], type: "text" },
+        { name: "Recipient", keys: ["recipient address", "recipient addresses", "terminatingmdn"], type: "text" },
+        { name: "Content", keys: ["messagecontent"], type: "text" },
+        { name: "Status", keys: ["messagefinalstatus", "finaldisposition"], type: "text" },
+        { name: "Size", keys: ["message size"], type: "number" },
+        { name: "Msisdn", keys: ["searchmtn", "mdn"], type: "text" }
+      ]
+    };
+
+    // Device Info data type
+    dataTypeDefinitions.device = {
+      name: "Device Information",
+      identifier: "device|imei|deviceid",
+      fields: [
+        { name: "Msisdn", keys: ["mtn"], type: "text" },
+        { name: "MIN", keys: ["min"], type: "text" },
+        { name: "Device ID", keys: ["device_id"], type: "text" },
+        { name: "IMEI", keys: ["imei"], type: "text" },
+        { name: "IMSI", keys: ["imsi"], type: "text" },
+        { name: "Manufacturer", keys: ["mfg_name"], type: "text" },
+        { name: "Device Name", keys: ["eqp_name"], type: "text" },
+        { name: "Device Type", keys: ["device_type"], type: "text" },
+        { name: "Status", keys: ["mtn_status"], type: "text" },
+        { name: "Effective Date", keys: ["mtn_effective_date"], type: "date" }
+      ]
+    };
+
+    // Account Info data type
+    dataTypeDefinitions.account = {
+      name: "Account Information",
+      identifier: "account|actdeact|subscriber",
+      fields: [
+        { name: "Msisdn", keys: ["search value", "mtn"], type: "text" },
+        { name: "Account Number", keys: ["account number"], type: "text" },
+        { name: "Name", keys: ["last name", "first name", "business name"], type: "text" },
+        { name: "Status", keys: ["mtn status code"], type: "text" },
+        { name: "Effective Date", keys: ["mtn effective date"], type: "date" },
+        { name: "Disconnect Date", keys: ["disconnect date"], type: "date" }
+      ]
+    };
+
+    // Payment data type
+    dataTypeDefinitions.payment = {
+      name: "Payment Records",
+      identifier: "payment|invoice|bill",
+      fields: [
+        { name: "Msisdn", keys: ["search mtn"], type: "text" },
+        { name: "Account Number", keys: ["account number"], type: "text" },
+        { name: "Date", keys: ["date", "invoice date"], type: "date" },
+        { name: "Amount", keys: ["payment amount"], type: "number" },
+        { name: "Payment Method", keys: ["payment method"], type: "text" },
+        { name: "Payment Source", keys: ["payment source"], type: "text" },
+        { name: "Payment Status", keys: ["payment status"], type: "text" }
+      ]
+    };
+
+    // Update data type selectors
+    updateDataTypeSelectors();
+  }
+
+  // Update data type selectors in the UI
+  function updateDataTypeSelectors() {
+    const dataTypeSelector = document.getElementById('dataTypeSelector');
+    const activeDataType = document.getElementById('activeDataType');
+    
+    // Clear existing options except default ones
+    while (dataTypeSelector.options.length > 2) {
+      dataTypeSelector.remove(2);
+    }
+    
+    while (activeDataType.options.length > 1) {
+      activeDataType.remove(1);
+    }
+    
+    // Add options for each data type
+    for (const [key, dataType] of Object.entries(dataTypeDefinitions)) {
+      const option1 = document.createElement('option');
+      option1.value = key;
+      option1.textContent = dataType.name;
+      dataTypeSelector.appendChild(option1);
+      
+      const option2 = document.createElement('option');
+      option2.value = key;
+      option2.textContent = dataType.name;
+      activeDataType.appendChild(option2);
+    }
+    
+    // Add detected data types to active data type selector
+    detectedDataTypes.forEach(type => {
+      if (dataTypeDefinitions[type]) {
+        const option = document.createElement('option');
+        option.value = type;
+        option.textContent = dataTypeDefinitions[type].name;
+        if (!Array.from(activeDataType.options).some(opt => opt.value === type)) {
+          activeDataType.appendChild(option);
+        }
+      }
+    });
+  }
+
+  // Create field definition UI
+  function createFieldDefinitionUI(field = null) {
+    const template = document.querySelector('.field-mapping.template');
+    const newField = template.cloneNode(true);
+    newField.classList.remove('template');
+    newField.style.display = '';
+    
+    if (field) {
+      newField.querySelector('.field-name').value = field.name;
+      newField.querySelector('.field-keys').value = field.keys.join(', ');
+      newField.querySelector('.field-type').value = field.type;
+    }
+    
+    newField.querySelector('.remove-field').addEventListener('click', function() {
+      newField.remove();
+    });
+    
+    document.getElementById('fieldDefinitions').appendChild(newField);
+    return newField;
+  }
 
   // Helper function: returns concatenated non-empty values for given alternative keys.
   function getField(record, alternatives) {
@@ -149,6 +562,37 @@
     return offsets.join(" | ");
   }
 
+  // Detect file type based on filename and header
+  function detectFileType(fileName, headers) {
+    // First try to match based on file name
+    for (const [key, definition] of Object.entries(dataTypeDefinitions)) {
+      const regex = new RegExp(definition.identifier, 'i');
+      if (regex.test(fileName)) {
+        return key;
+      }
+    }
+    
+    // If no match by filename, try to match by headers
+    for (const [key, definition] of Object.entries(dataTypeDefinitions)) {
+      // Count how many field keys match headers
+      let matchCount = 0;
+      definition.fields.forEach(field => {
+        field.keys.forEach(key => {
+          if (headers.includes(key.toLowerCase())) {
+            matchCount++;
+          }
+        });
+      });
+      
+      // If more than 30% of the fields match, consider it a match
+      if (matchCount > definition.fields.length * 0.3) {
+        return key;
+      }
+    }
+    
+    return 'unknown';
+  }
+
   // Compute a score based on total duration and unique towers.
   // (For example, score = (duration in minutes) + (unique towers * 10))
   function computeScore(record) {
@@ -157,80 +601,280 @@
     return Math.round(durationMinutes + towersScore);
   }
 
-  // Process selected CSV files with PapaParse
-  function processFiles() {
-    const files = document.getElementById('csvFile').files;
-    currentDataset = [];
-    Array.from(files).forEach(file => {
-      // Determine file type based on filename
-      let fileType = file.name.toLowerCase().includes("volte") ? "volte" : "voci";
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        transformHeader: header => header.trim().toLowerCase(),
-        complete: function(results) {
-          results.data.forEach(row => {
-            row.fileType = fileType;
-            // For duration, try both "timeusage" and "sou"
-            row.timeusage = parseInt(row["timeusage"] || row["sou"], 10) || 0;
-            currentDataset.push(row);
+  // Helper function to process Excel files
+  function processExcelFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          
+          // Convert Excel data to match our format
+          const headers = jsonData[0].map(h => h && h.toString ? h.toString().trim().toLowerCase() : '');
+          const rows = jsonData.slice(1).map(row => {
+            const obj = {};
+            headers.forEach((header, index) => {
+              if (header) {
+                obj[header] = row[index] !== undefined ? (row[index] !== null ? row[index].toString() : '') : '';
+              }
+            });
+            return obj;
           });
-          // Initially, currentFilteredDataset is the full dataset
-          currentFilteredDataset = currentDataset.slice();
-          renderRecordLevel(currentDataset);
+          
+          resolve({ headers, rows });
+        } catch (error) {
+          reject(error);
         }
-      });
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
     });
   }
 
-  // Render record-level view
-  function renderRecordLevel(dataset) {
-    document.getElementById("tableTitle").innerText = "Call Detail Analysis (Record Level)";
-    document.getElementById("tableHeader").innerHTML = `
-      <th onclick="sortTable(0)">Msisdn</th>
-      <th onclick="sortTable(1)">Search Value</th>
-      <th onclick="sortTable(2)">Search Start (GMT)</th>
-      <th onclick="sortTable(3)">Search End (GMT)</th>
-      <th onclick="sortTable(4)">Record Open Time</th>
-      <th onclick="sortTable(5)">Duration</th>
-      <th onclick="sortTable(6)">Call Direction</th>
-      <th onclick="sortTable(7)">Calling Party</th>
-      <th onclick="sortTable(8)">Called Party</th>
-      <th onclick="sortTable(9)">Primary Tower</th>
-      <th onclick="sortTable(10)">Cell ID</th>
-      <th onclick="sortTable(11)">Extras / Offsets</th>
-      <th onclick="sortTable(12)">File Type</th>
-    `;
+  // Process selected files (CSV and Excel)
+  async function processFiles() {
+    const files = document.getElementById('csvFile').files;
+    if (files.length === 0) {
+      alert("Please select files to process.");
+      return;
+    }
+    
+    currentDataset = [];
+    detectedDataTypes.clear();
+    
+    // Check if user selected a specific file type
+    const manualFileType = document.getElementById('fileTypeSelector').value;
+    
+    for (const file of Array.from(files)) {
+      try {
+        let fileData;
+        let headers = [];
+        
+        if (file.name.toLowerCase().endsWith('.csv')) {
+          // Process CSV file
+          fileData = await new Promise((resolve, reject) => {
+            Papa.parse(file, {
+              header: true,
+              skipEmptyLines: true,
+              transformHeader: header => header.trim().toLowerCase(),
+              complete: function(results) {
+                headers = results.meta.fields;
+                resolve(results.data);
+              },
+              error: function(error) {
+                reject(error);
+              }
+            });
+          });
+        } else if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
+          // Process Excel file
+          const excelData = await processExcelFile(file);
+          headers = excelData.headers;
+          fileData = excelData.rows;
+        } else {
+          console.warn(`Unsupported file type: ${file.name}`);
+          continue;
+        }
+
+        // Detect or use manual file type
+        let fileType = manualFileType !== 'auto' ? manualFileType : detectFileType(file.name, headers);
+        
+        if (fileType === 'unknown') {
+          alert(`Could not automatically determine the type of file: ${file.name}. Using default processing.`);
+          // Show create type button for unknown files
+          document.getElementById('fileTypeDetection').style.display = 'block';
+          document.getElementById('detectedFileType').textContent = 'Unknown';
+          document.getElementById('createTypeBtn').style.display = 'inline-block';
+          document.getElementById('createTypeBtn').onclick = function() {
+            // Switch to config tab with headers pre-filled
+            document.getElementById('config-tab').click();
+            document.getElementById('dataTypeSelector').value = 'new';
+            // Pre-fill with detected headers
+            updateDataTypeConfig();
+            // Auto-generate field definitions from headers
+            headers.forEach(header => {
+              const field = {
+                name: header.charAt(0).toUpperCase() + header.slice(1),
+                keys: [header],
+                type: 'text'
+              };
+              createFieldDefinitionUI(field);
+            });
+          };
+        } else {
+          // Show detected file type
+          document.getElementById('fileTypeDetection').style.display = 'block';
+          document.getElementById('detectedFileType').textContent = dataTypeDefinitions[fileType] ? 
+            dataTypeDefinitions[fileType].name : fileType;
+          document.getElementById('createTypeBtn').style.display = 'none';
+          
+          // Add to detected data types
+          detectedDataTypes.add(fileType);
+        }
+
+        // Add the file type to each record
+        fileData.forEach(row => {
+          row.fileType = fileType;
+          
+          // For call records, ensure duration field is properly processed
+          if (fileType === 'call') {
+            row.timeusage = parseInt(row["timeusage"] || row["sou"], 10) || 0;
+          }
+          
+          currentDataset.push(row);
+        });
+        
+      } catch (error) {
+        console.error(`Error processing file ${file.name}:`, error);
+        alert(`Error processing file ${file.name}. Please check the file format and try again.`);
+      }
+    }
+
+    // Update data type selector with detected types
+    updateDataTypeSelectors();
+
+    // Initially, currentFilteredDataset is the full dataset
+    currentFilteredDataset = currentDataset.slice();
+    
+    // Show appropriate filter section based on detected data types
+    updateFilterSections();
+    
+    // Render the data
+    renderData();
+  }
+
+  // Update filter sections based on detected data types
+  function updateFilterSections() {
+    document.getElementById('callDataFilters').style.display = detectedDataTypes.has('call') ? 'block' : 'none';
+    document.getElementById('messageDataFilters').style.display = detectedDataTypes.has('text') ? 'block' : 'none';
+    document.getElementById('deviceDataFilters').style.display = detectedDataTypes.has('device') ? 'block' : 'none';
+  }
+
+  // Render data based on data types
+  function renderData() {
+    const activeType = document.getElementById('activeDataType').value;
+    
+    if (activeType === 'all') {
+      // If grouped by phone is checked and we have call data
+      if (document.getElementById('groupByPhone').checked && detectedDataTypes.has('call')) {
+        renderAggregatedLevel(buildAggregatedDataset());
+      } else {
+        // Use the first detected data type for display
+        const firstType = detectedDataTypes.size > 0 ? 
+          Array.from(detectedDataTypes)[0] : 'call';
+        renderDataByType(currentFilteredDataset, firstType);
+      }
+    } else {
+      // Render specific data type
+      const filtered = currentFilteredDataset.filter(record => record.fileType === activeType);
+      renderDataByType(filtered, activeType);
+    }
+  }
+
+  // Helper function to format a value based on its data type
+  function formatValue(value, type) {
+    if (!value) return '';
+    
+    switch(type) {
+      case 'date':
+        // Try to parse and format the date
+        try {
+          const date = new Date(value);
+          if (!isNaN(date.getTime())) {
+            return date.toLocaleString();
+          }
+        } catch (e) {}
+        return value;
+        
+      case 'number':
+        // Try to format as a number
+        const num = parseFloat(value);
+        if (!isNaN(num)) {
+          return num.toLocaleString();
+        }
+        return value;
+        
+      default:
+        return value;
+    }
+  }
+
+  // Render data based on data type
+  function renderDataByType(dataset, dataType) {
+    if (!dataTypeDefinitions[dataType]) {
+      console.error(`Data type definition not found for: ${dataType}`);
+      return;
+    }
+    
+    const definition = dataTypeDefinitions[dataType];
+    document.getElementById("tableTitle").innerText = `${definition.name} (${dataset.length} records)`;
+    
+    // Create table header based on the data type definition
+    const headerHtml = definition.fields.map((field, index) => 
+      `<th onclick="sortTable(${index})">${field.name}</th>`
+    ).join('');
+    
+    document.getElementById("tableHeader").innerHTML = headerHtml;
+    
+    // Render table body
     const tbody = document.querySelector('#resultTable tbody');
     tbody.innerHTML = dataset.map(record => {
-      let msisdn = getField(record, ["msisdn", "volte msisdn"]);
-      let searchValue = getField(record, ["search value", "volte search value"]);
-      let searchStart = getField(record, ["search start (gmt)", "volte search start (gmt)"]);
-      let searchEnd = getField(record, ["search end (gmt)", "volte search end (gmt)"]);
-      let recordOpen = getField(record, ["rcd open dt/tm (gmt)", "record open dt/tm(gmt)", "record open date/time", "volte rcd open dt/tm(gmt)", "volte record open date/time"]);
-      let duration = record["timeusage"];
-      let callDir = getField(record, ["calldirection", "dir", "volte dir"]);
-      let callingParty = getField(record, ["calling party no", "cpn", "volte cpn", "volte calling party no"]);
-      let calledParty = getField(record, ["called prty addr", "called #", "volte called #", "volte called prty addr"]);
-      let primaryTower = getField(record, ["mkt enodeb id", "enb id", "market id", "volte enb id", "volte market id", "volte mkt enodeb id"]);
-      let cellId = getField(record, ["ani cell id", "cell id", "volte cell id", "volte ani cell id"]);
-      let extras = record.fileType === "volte" ? getVolteExtras(record) : getVoceOffsets(record);
-      let fileTypeLabel = record.fileType.toUpperCase();
+      const cells = definition.fields.map(field => {
+        const value = getField(record, field.keys);
+        return `<td>${formatValue(value, field.type)}</td>`;
+      }).join('');
+      
+      return `<tr>${cells}</tr>`;
+    }).join('');
+  }
+
+  // Render for call records (original view)
+  function renderRecordLevel(dataset) {
+    if (detectedDataTypes.has('call')) {
+      renderDataByType(dataset, 'call');
+    } else {
+      // Fallback to generic rendering if no call data
+      renderGenericTable(dataset);
+    }
+  }
+
+  // Generic table render for unknown data types
+  function renderGenericTable(dataset) {
+    if (dataset.length === 0) {
+      document.getElementById("tableTitle").innerText = "No data available";
+      document.getElementById("tableHeader").innerHTML = "";
+      document.querySelector('#resultTable tbody').innerHTML = "";
+      return;
+    }
+    
+    // Get all unique column names from the dataset
+    const allColumns = new Set();
+    dataset.forEach(record => {
+      Object.keys(record).forEach(key => {
+        if (key !== 'fileType') {
+          allColumns.add(key);
+        }
+      });
+    });
+    
+    const columns = Array.from(allColumns);
+    
+    // Create header
+    document.getElementById("tableTitle").innerText = `Data Analysis (${dataset.length} records)`;
+    document.getElementById("tableHeader").innerHTML = columns.map((column, index) => 
+      `<th onclick="sortTable(${index})">${column}</th>`
+    ).join('');
+    
+    // Create table rows
+    const tbody = document.querySelector('#resultTable tbody');
+    tbody.innerHTML = dataset.map(record => {
       return `<tr>
-                <td>${msisdn || ''}</td>
-                <td>${searchValue || ''}</td>
-                <td>${searchStart || ''}</td>
-                <td>${searchEnd || ''}</td>
-                <td>${recordOpen || ''}</td>
-                <td>${duration}</td>
-                <td>${callDir || ''}</td>
-                <td>${callingParty || ''}</td>
-                <td>${calledParty || ''}</td>
-                <td>${primaryTower || ''}</td>
-                <td>${cellId || ''}</td>
-                <td>${extras || ''}</td>
-                <td>${fileTypeLabel}</td>
-              </tr>`;
+        ${columns.map(column => `<td>${record[column] || ''}</td>`).join('')}
+      </tr>`;
     }).join('');
   }
 
@@ -238,9 +882,14 @@
   // and include Name and computed Score.
   function buildAggregatedDataset() {
     let aggregated = {};
-    currentDataset.forEach(record => {
+    
+    // Only process records with call data
+    const callRecords = currentFilteredDataset.filter(record => record.fileType === 'call');
+    
+    callRecords.forEach(record => {
       let phone = getField(record, ["msisdn", "volte msisdn"]);
       if (!phone) return;
+      
       if (!aggregated[phone]) {
         aggregated[phone] = {
           phone: phone,
@@ -250,13 +899,17 @@
           fileTypes: new Set()
         };
       }
+      
       let towerVal = getField(record, ["mkt enodeb id", "enb id", "market id", "volte enb id", "volte market id", "volte mkt enodeb id"]);
       if(towerVal) aggregated[phone].towers.add(towerVal);
+      
       let loc = getField(record, ["search value", "volte search value"]);
       if(loc) aggregated[phone].locations.add(loc.toLowerCase().trim());
-      aggregated[phone].totalDuration += record["timeusage"];
+      
+      aggregated[phone].totalDuration += record["timeusage"] || 0;
       aggregated[phone].fileTypes.add(record.fileType.toUpperCase());
     });
+    
     let aggregatedArray = Object.keys(aggregated).map(phone => {
       let data = aggregated[phone];
       let record = {
@@ -267,18 +920,22 @@
         "Locations": Array.from(data.locations).join(', '),
         "File Type": Array.from(data.fileTypes).join(', ')
       };
+      
       // Merge assigned name if available
       record["Name"] = nameMapping[phone] || '';
+      
       // Compute score based on your defined criteria
       record["Score"] = computeScore(record);
+      
       return record;
     });
+    
     return aggregatedArray;
   }
 
   // Render aggregated view (includes new columns Name & Score)
   function renderAggregatedLevel(dataset) {
-    document.getElementById("tableTitle").innerText = "Call Detail Analysis (Aggregated by Phone)";
+    document.getElementById("tableTitle").innerText = `Call Detail Analysis (Aggregated by Phone - ${dataset.length} records)`;
     document.getElementById("tableHeader").innerHTML = `
       <th onclick="sortTable(0)">Msisdn</th>
       <th onclick="sortTable(1)">Name</th>
@@ -289,6 +946,7 @@
       <th onclick="sortTable(6)">File Type</th>
       <th onclick="sortTable(7)">Score</th>
     `;
+    
     const tbody = document.querySelector('#resultTable tbody');
     tbody.innerHTML = dataset.map(record => {
       return `<tr>
@@ -296,7 +954,7 @@
                 <td>${record["Name"] || ''}</td>
                 <td>${record["Unique Towers"] || 0}</td>
                 <td>${record["Tower IDs"] || ''}</td>
-                <td>${record["Total Duration"]}</td>
+                <td>${formatValue(record["Total Duration"], 'number')}</td>
                 <td>${record["Locations"] || ''}</td>
                 <td>${record["File Type"] || ''}</td>
                 <td>${record["Score"]}</td>
@@ -313,8 +971,46 @@
     });
   }
 
-  // Apply advanced filters based on input fields
+  // Apply advanced filters based on input fields and data types
   function applyAdvancedFilters() {
+    const activeType = document.getElementById('activeDataType').value;
+    let filtered = currentDataset.slice();
+    
+    // Apply generic text search if present
+    const searchText = document.getElementById('searchBox').value.toLowerCase();
+    if (searchText) {
+      filtered = filtered.filter(record => {
+        return Object.values(record).some(value => 
+          value && value.toString().toLowerCase().includes(searchText)
+        );
+      });
+    }
+    
+    // If specific data type is selected, filter to that type
+    if (activeType !== 'all') {
+      filtered = filtered.filter(record => record.fileType === activeType);
+    }
+    
+    // Apply data type specific filters
+    if (activeType === 'all' || activeType === 'call') {
+      filtered = applyCallFilters(filtered);
+    }
+    
+    if (activeType === 'all' || activeType === 'text') {
+      filtered = applyMessageFilters(filtered);
+    }
+    
+    if (activeType === 'all' || activeType === 'device') {
+      filtered = applyDeviceFilters(filtered);
+    }
+    
+    // Update currentFilteredDataset and render
+    currentFilteredDataset = filtered;
+    renderData();
+  }
+  
+  // Apply call record specific filters
+  function applyCallFilters(records) {
     let startDateVal = document.getElementById('startDate').value;
     let endDateVal = document.getElementById('endDate').value;
     let minDuration = parseInt(document.getElementById('minDuration').value, 10);
@@ -325,57 +1021,167 @@
     let searchLocationInput = document.getElementById('searchLocation').value.trim();
     let minTowers = parseInt(document.getElementById('minTowers').value, 10);
     let maxTowers = parseInt(document.getElementById('maxTowers').value, 10);
-    let groupBy = document.getElementById('groupByPhone').checked;
-
+    
+    // If none of these filters are set, return unchanged
+    if (!startDateVal && !endDateVal && isNaN(minDuration) && isNaN(maxDuration) && 
+        !cellTower && !callDirection && !searchMsisdn && !searchLocationInput && 
+        isNaN(minTowers) && isNaN(maxTowers)) {
+      return records;
+    }
+    
+    // Process location search terms
     let locationTerms = [];
     if (searchLocationInput) {
       locationTerms = searchLocationInput.split(',')
         .map(term => term.trim().toLowerCase())
         .filter(term => term.length > 0);
     }
-
-    if (groupBy) {
-      let aggregated = buildAggregatedDataset();
-      let filtered = aggregated.filter(record => {
-        if (!isNaN(minTowers) && record["Unique Towers"] < minTowers) return false;
-        if (!isNaN(maxTowers) && record["Unique Towers"] > maxTowers) return false;
-        if (searchMsisdn && record.Msisdn.toLowerCase().indexOf(searchMsisdn) === -1) return false;
-        if (locationTerms.length > 0) {
-          let locations = record["Locations"].toLowerCase();
-          let allMatch = locationTerms.every(term => locations.indexOf(term) !== -1);
-          if (!allMatch) return false;
-        }
-        return true;
-      });
-      currentFilteredDataset = filtered;
-      renderAggregatedLevel(filtered);
-    } else {
-      let filtered = currentDataset.filter(record => {
+    
+    // Only filter records that are call type
+    return records.filter(record => {
+      // Skip non-call records
+      if (record.fileType !== 'call') return true;
+      
+      try {
         let recordDate = new Date(record["rcd open dt/tm (gmt)"] || record["record open dt/tm(gmt)"] || record["record open date/time"]);
         if (startDateVal && recordDate < new Date(startDateVal)) return false;
         if (endDateVal && recordDate > new Date(endDateVal)) return false;
         if (!isNaN(minDuration) && record["timeusage"] < minDuration) return false;
         if (!isNaN(maxDuration) && record["timeusage"] > maxDuration) return false;
-        if (cellTower && (!getField(record, ["mkt enodeb id", "enb id", "market id", "volte enb id", "volte market id", "volte mkt enodeb id"]) ||
-          getField(record, ["mkt enodeb id", "enb id", "market id", "volte enb id", "volte market id", "volte mkt enodeb id"]).toLowerCase().indexOf(cellTower) === -1))
-          return false;
-        if (callDirection && getField(record, ["calldirection", "dir", "volte dir"]) !== callDirection) return false;
-        if (searchMsisdn && (!getField(record, ["msisdn", "volte msisdn"]) || getField(record, ["msisdn", "volte msisdn"]).toLowerCase().indexOf(searchMsisdn) === -1))
-          return false;
+        
+        if (cellTower) {
+          const towerValue = getField(record, ["mkt enodeb id", "enb id", "market id", "volte enb id", "volte market id", "volte mkt enodeb id"]);
+          if (!towerValue || !towerValue.toLowerCase().includes(cellTower)) return false;
+        }
+        
+        if (callDirection) {
+          const direction = getField(record, ["calldirection", "dir", "volte dir"]);
+          if (direction !== callDirection) return false;
+        }
+        
+        if (searchMsisdn) {
+          const msisdn = getField(record, ["msisdn", "volte msisdn"]);
+          if (!msisdn || !msisdn.toLowerCase().includes(searchMsisdn)) return false;
+        }
+        
         if (locationTerms.length > 0) {
-          let value = (getField(record, ["search value", "volte search value"]) || "").toLowerCase();
-          let matchFound = locationTerms.some(term => value.indexOf(term) !== -1);
+          const value = (getField(record, ["search value", "volte search value"]) || "").toLowerCase();
+          const matchFound = locationTerms.some(term => value.includes(term));
           if (!matchFound) return false;
         }
+        
         return true;
-      });
-      currentFilteredDataset = filtered;
-      renderRecordLevel(filtered);
+      } catch (e) {
+        console.error("Error filtering record:", e);
+        return true;
+      }
+    });
+  }
+  
+  // Apply message record specific filters
+  function applyMessageFilters(records) {
+    let startDateVal = document.getElementById('msgStartDate').value;
+    let endDateVal = document.getElementById('msgEndDate').value;
+    let msgType = document.getElementById('msgType').value.toLowerCase();
+    let msgDirection = document.getElementById('msgDirection').value;
+    let msgContent = document.getElementById('msgContent').value.toLowerCase();
+    let msgSender = document.getElementById('msgSender').value.toLowerCase();
+    let msgRecipient = document.getElementById('msgRecipient').value.toLowerCase();
+    
+    // If none of these filters are set, return unchanged
+    if (!startDateVal && !endDateVal && !msgType && !msgDirection && 
+        !msgContent && !msgSender && !msgRecipient) {
+      return records;
     }
+    
+    // Only filter records that are text type
+    return records.filter(record => {
+      // Skip non-message records
+      if (record.fileType !== 'text') return true;
+      
+      try {
+        let recordDate = new Date(getField(record, ["messagearrival", "record date/time", "submission date/time"]));
+        if (startDateVal && recordDate < new Date(startDateVal)) return false;
+        if (endDateVal && recordDate > new Date(endDateVal)) return false;
+        
+        if (msgType) {
+          const type = getField(record, ["network element name"]).toLowerCase();
+          if (msgType === 'sms' && type.includes('mms')) return false;
+          if (msgType === 'mms' && !type.includes('mms')) return false;
+        }
+        
+        if (msgDirection) {
+          const direction = getField(record, ["charge information"]);
+          if (msgDirection === 'MO' && !direction.includes('MO')) return false;
+          if (msgDirection === 'MT' && !direction.includes('MT')) return false;
+        }
+        
+        if (msgContent) {
+          const content = getField(record, ["messagecontent"]).toLowerCase();
+          if (!content.includes(msgContent)) return false;
+        }
+        
+        if (msgSender) {
+          const sender = getField(record, ["originator address", "originatingmdn"]).toLowerCase();
+          if (!sender.includes(msgSender)) return false;
+        }
+        
+        if (msgRecipient) {
+          const recipient = getField(record, ["recipient address", "recipient addresses", "terminatingmdn"]).toLowerCase();
+          if (!recipient.includes(msgRecipient)) return false;
+        }
+        
+        return true;
+      } catch (e) {
+        console.error("Error filtering message record:", e);
+        return true;
+      }
+    });
+  }
+  
+  // Apply device record specific filters
+  function applyDeviceFilters(records) {
+    let deviceId = document.getElementById('deviceId').value.toLowerCase();
+    let deviceType = document.getElementById('deviceType').value.toLowerCase();
+    let deviceMfg = document.getElementById('deviceMfg').value.toLowerCase();
+    
+    // If none of these filters are set, return unchanged
+    if (!deviceId && !deviceType && !deviceMfg) {
+      return records;
+    }
+    
+    // Only filter records that are device type
+    return records.filter(record => {
+      // Skip non-device records
+      if (record.fileType !== 'device') return true;
+      
+      try {
+        if (deviceId) {
+          const id = getField(record, ["device_id", "imei"]).toLowerCase();
+          if (!id.includes(deviceId)) return false;
+        }
+        
+        if (deviceType) {
+          const type = getField(record, ["device_type"]).toLowerCase();
+          if (!type.includes(deviceType)) return false;
+        }
+        
+        if (deviceMfg) {
+          const mfg = getField(record, ["mfg_name"]).toLowerCase();
+          if (!mfg.includes(deviceMfg)) return false;
+        }
+        
+        return true;
+      } catch (e) {
+        console.error("Error filtering device record:", e);
+        return true;
+      }
+    });
   }
 
   // Reset all filters and show full dataset
   function resetFilters() {
+    // Reset call filters
     document.getElementById('startDate').value = '';
     document.getElementById('endDate').value = '';
     document.getElementById('minDuration').value = '';
@@ -387,8 +1193,28 @@
     document.getElementById('minTowers').value = '';
     document.getElementById('maxTowers').value = '';
     document.getElementById('groupByPhone').checked = false;
+    
+    // Reset message filters
+    document.getElementById('msgStartDate').value = '';
+    document.getElementById('msgEndDate').value = '';
+    document.getElementById('msgType').value = '';
+    document.getElementById('msgDirection').value = '';
+    document.getElementById('msgContent').value = '';
+    document.getElementById('msgSender').value = '';
+    document.getElementById('msgRecipient').value = '';
+    
+    // Reset device filters
+    document.getElementById('deviceId').value = '';
+    document.getElementById('deviceType').value = '';
+    document.getElementById('deviceMfg').value = '';
+    
+    // Reset general search
+    document.getElementById('searchBox').value = '';
+    document.getElementById('activeDataType').value = 'all';
+    
+    // Reset and render
     currentFilteredDataset = currentDataset.slice();
-    renderRecordLevel(currentDataset);
+    renderData();
   }
 
   // Export the currentFilteredDataset as a CSV file
@@ -468,6 +1294,8 @@
     document.getElementById('mapName').value = '';
     if(document.getElementById('groupByPhone').checked) {
       renderAggregatedLevel(buildAggregatedDataset());
+    } else {
+      renderData(); // Refresh any view to show the updated name
     }
     alert("Name assigned successfully.");
   }
@@ -486,6 +1314,211 @@
     });
     tbody.innerHTML = rows.map(row => row.outerHTML).join('');
   }
+
+  // Data Type Configuration Functions
+  
+  // Update the data type configuration UI based on selected data type
+  function updateDataTypeConfig() {
+    const dataTypeKey = document.getElementById('dataTypeSelector').value;
+    const configArea = document.getElementById('dataTypeConfig');
+    const fieldDefinitions = document.getElementById('fieldDefinitions');
+    const dtName = document.getElementById('dtName');
+    const dtIdentifier = document.getElementById('dtIdentifier');
+    const editBtn = document.getElementById('editDataTypeBtn');
+    const deleteBtn = document.getElementById('deleteDataTypeBtn');
+    
+    // Clear existing field definitions (except template)
+    Array.from(fieldDefinitions.children).forEach(child => {
+      if (!child.classList.contains('template')) {
+        child.remove();
+      }
+    });
+    
+    if (dataTypeKey === 'new') {
+      // Set up for new data type
+      dtName.value = '';
+      dtIdentifier.value = '';
+      dtName.disabled = false;
+      dtIdentifier.disabled = false;
+      editBtn.disabled = true;
+      deleteBtn.disabled = true;
+    } else if (dataTypeKey && dataTypeDefinitions[dataTypeKey]) {
+      // Load existing data type
+      const dataType = dataTypeDefinitions[dataTypeKey];
+      dtName.value = dataType.name;
+      dtIdentifier.value = dataType.identifier;
+      dtName.disabled = true; // Don't allow changing the name directly
+      dtIdentifier.disabled = false;
+      editBtn.disabled = false;
+      deleteBtn.disabled = false;
+      
+      // Create field definition UI elements
+      dataType.fields.forEach(field => {
+        createFieldDefinitionUI(field);
+      });
+    } else {
+      // No selection
+      dtName.value = '';
+      dtIdentifier.value = '';
+      dtName.disabled = true;
+      dtIdentifier.disabled = true;
+      editBtn.disabled = true;
+      deleteBtn.disabled = true;
+    }
+  }
+  
+  // Save current data type configuration
+  function saveDataTypeConfig() {
+    const dataTypeKey = document.getElementById('dataTypeSelector').value;
+    const dtName = document.getElementById('dtName').value.trim();
+    const dtIdentifier = document.getElementById('dtIdentifier').value.trim();
+    
+    if (!dtName || !dtIdentifier) {
+      alert("Data type name and identifier pattern are required.");
+      return;
+    }
+    
+    // Collect field definitions
+    const fieldElements = document.querySelectorAll('#fieldDefinitions .field-mapping:not(.template)');
+    const fields = [];
+    
+    fieldElements.forEach(element => {
+      const name = element.querySelector('.field-name').value.trim();
+      const keysStr = element.querySelector('.field-keys').value.trim();
+      const type = element.querySelector('.field-type').value;
+      
+      if (name && keysStr) {
+        const keys = keysStr.split(',').map(k => k.trim()).filter(k => k);
+        fields.push({ name, keys, type });
+      }
+    });
+    
+    if (fields.length === 0) {
+      alert("At least one field definition is required.");
+      return;
+    }
+    
+    // Generate a key if creating a new data type
+    let key = dataTypeKey;
+    if (dataTypeKey === 'new') {
+      key = dtName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      // Make sure the key is unique
+      if (dataTypeDefinitions[key]) {
+        let counter = 1;
+        while (dataTypeDefinitions[key + counter]) {
+          counter++;
+        }
+        key = key + counter;
+      }
+    }
+    
+    // Save the data type definition
+    dataTypeDefinitions[key] = {
+      name: dtName,
+      identifier: dtIdentifier,
+      fields: fields
+    };
+    
+    // Update UI
+    updateDataTypeSelectors();
+    alert(`Data type "${dtName}" has been saved.`);
+    
+    // Reset the form for a new data type
+    document.getElementById('dataTypeSelector').value = '';
+    updateDataTypeConfig();
+  }
+  
+  // Delete a data type
+  function deleteDataTypeConfig() {
+    const dataTypeKey = document.getElementById('dataTypeSelector').value;
+    if (!dataTypeKey || dataTypeKey === 'new' || !dataTypeDefinitions[dataTypeKey]) {
+      alert("Please select a valid data type to delete.");
+      return;
+    }
+    
+    if (confirm(`Are you sure you want to delete the data type "${dataTypeDefinitions[dataTypeKey].name}"?`)) {
+      delete dataTypeDefinitions[dataTypeKey];
+      updateDataTypeSelectors();
+      document.getElementById('dataTypeSelector').value = '';
+      updateDataTypeConfig();
+      alert("Data type deleted successfully.");
+    }
+  }
+  
+  // Export data type definitions
+  function exportDataTypeDefinitions() {
+    const definitionsJson = JSON.stringify(dataTypeDefinitions, null, 2);
+    const blob = new Blob([definitionsJson], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "telecom_data_type_definitions.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  
+  // Import data type definitions
+  function importDataTypeDefinitions(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const importedDefinitions = JSON.parse(e.target.result);
+        // Validate the format
+        let isValid = true;
+        for (const [key, definition] of Object.entries(importedDefinitions)) {
+          if (!definition.name || !definition.identifier || !Array.isArray(definition.fields)) {
+            isValid = false;
+            break;
+          }
+        }
+        
+        if (isValid) {
+          // Merge with existing definitions (overwrite duplicates)
+          dataTypeDefinitions = { ...dataTypeDefinitions, ...importedDefinitions };
+          updateDataTypeSelectors();
+          alert("Data type definitions imported successfully.");
+        } else {
+          alert("The imported file contains invalid data type definitions.");
+        }
+      } catch (error) {
+        console.error("Error importing data type definitions:", error);
+        alert("Error importing data type definitions. Please check the file format.");
+      }
+    };
+    reader.readAsText(file);
+  }
+  
+  // Initialize the application
+  function initializeApp() {
+    // Initialize data types
+    initializeDataTypes();
+    
+    // Set up event listeners
+    document.getElementById('dataTypeSelector').addEventListener('change', updateDataTypeConfig);
+    document.getElementById('editDataTypeBtn').addEventListener('click', function() {
+      document.getElementById('dtName').disabled = false;
+    });
+    document.getElementById('saveDataTypeBtn').addEventListener('click', saveDataTypeConfig);
+    document.getElementById('deleteDataTypeBtn').addEventListener('click', deleteDataTypeConfig);
+    document.getElementById('exportDataTypesBtn').addEventListener('click', exportDataTypeDefinitions);
+    document.getElementById('addFieldBtn').addEventListener('click', function() {
+      createFieldDefinitionUI();
+    });
+    
+    // Initialize the data type config UI
+    updateDataTypeConfig();
+    
+    // Hide file type detection info initially
+    document.getElementById('fileTypeDetection').style.display = 'none';
+  }
+  
+  // Start the application when the DOM is loaded
+  document.addEventListener('DOMContentLoaded', initializeApp);
 </script>
 </body>
 </html>
