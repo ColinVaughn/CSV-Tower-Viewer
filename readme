@@ -1,104 +1,174 @@
+---
 
-# Telecom Data Analyzer - User Guide
+# 📡 Telecom Data Analyzer & CSV Tower Viewer
 
-## Overview
+A browser-based tool for analyzing and visualizing telecom data—including CSV files with cell tower and call records. With interactive mapping, dynamic filtering, and performance optimizations, this tool helps you quickly gain insights from large datasets.
 
-The Telecom Data Analyzer is a browser-based tool for analyzing and visualizing telecom data files. It supports various file formats including CSV and Excel, and can automatically detect and process different types of telecom data such as call records, text messages, device information, and data sessions.
+---
 
-## Getting Started
+## 📚 Overview
 
-1. Open the application in your web browser.
-2. The interface is divided into two main tabs: "Data Viewer" and "Data Type Configuration".
+The **Telecom Data Analyzer & CSV Tower Viewer** is designed to help you:
+- **Visualize Telecom Data:** Easily plot cell tower locations and telecom records on an interactive map.
+- **Process Various File Formats:** Upload CSV and Excel files containing call records, device information, and tower data.
+- **Auto-detect Data Types:** Automatically identify data types like call records, text messages, device info, and more.
+- **Customize Data Views:** Create custom field definitions and name mappings for clearer insights.
 
-## File Upload and Processing
+---
 
-1. In the "Data Viewer" tab, locate the "Upload Files" section.
-2. Click "Browse" to select your telecom data files (CSV or Excel format).
-3. You can select multiple files at once.
-4. By default, the application will auto-detect file types, but you can also select a specific file type from the dropdown if needed.
-5. Click "Process Files" to load and analyze the data.
+## ✨ Features
 
-## Data Types and Automatic Detection
+- **CSV/Excel File Upload:**  
+  - Drag and drop or browse for multiple files.
+  - Automatic file type detection with manual override.
+  
+- **Interactive Map Visualization:**  
+  - Plot cell tower locations on a responsive map.
+  - Interactive markers with detailed popups.
+  - Support for marker clustering and grouping (e.g., group by phone number).
 
-The application automatically detects these data types:
-- Call Records
-- Text/MMS Messages
-- Device Information
-- Account Information
-- Payment Records
-- Data Session Records
+- **Dynamic Filtering & Search:**  
+  - Basic text search across all fields.
+  - Advanced filtering based on specific data types:
+    - **Call Records:** Filter by date range, duration, tower ID, call direction, etc.
+    - **Text/MMS Messages:** Filter by date, type, sender/recipient, etc.
+    - **Device Information:** Filter by device ID, type, manufacturer.
+    - **Data Sessions:** Filter by date, cell/tower ID, IP addresses, and more.
+  - Automatic generation of filters for additional fields discovered in your data.
 
-If a file type is unknown, you can create a custom type definition by clicking the "Create Custom Type" button that appears.
+- **Name Mapping:**  
+  - Assign readable names to phone numbers for easier interpretation.
+  - Import/export mappings via CSV for reuse.
 
-## Name Mapping
+- **Data Visualization & Export:**  
+  - Paginated data tables (100 records per page) with sortable columns.
+  - Export filtered datasets as CSV files.
+  - Highlight additional data fields with a light background.
 
-The Name Mapping feature allows you to assign readable names to phone numbers:
+- **Custom Data Type Configuration:**  
+  - Edit existing data types or create new ones.
+  - Define field display names, potential column headers, and field types.
+  - Import/export definitions as JSON.
 
-1. Enter a phone number in the "Phone Number" field.
-2. Enter a name in the "Assign Name" field.
-3. Click "Assign Name" to create the mapping.
-4. Names will appear in the data display instead of numbers.
-5. You can export your name mappings using "Export Name Mapping CSV" and import them later.
+- **Performance Optimization:**  
+  - Chunked processing for large files.
+  - Batch processing for large Excel files (>10MB).
+  - Recommended filtering to handle thousands of records efficiently.
 
-## Searching and Filtering
+---
+
+## 🚀 Getting Started
+
+### 1. Open the Application
+Visit the live demo: [CSV Tower Viewer](https://colinvaughn.github.io/CSV-Tower-Viewer/).
+
+### 2. Interface Overview
+The user interface is divided into two primary tabs:
+- **Data Viewer:** Upload, process, and analyze your telecom data.
+- **Data Type Configuration:** Customize or create new data type definitions for accurate auto-detection.
+
+---
+
+## 📂 File Upload and Processing
+
+1. **Upload Files:**  
+   - In the **Data Viewer** tab, click the **"Browse"** button to select your CSV or Excel files.
+   - Multiple file selections are supported.
+
+2. **Process Data:**  
+   - Files are automatically processed and data types are auto-detected.
+   - For unrecognized file types, click **"Create Custom Type"** to define new data structures.
+
+---
+
+## 🔍 Searching, Filtering, and Visualization
 
 ### Basic Search
-- Use the search box at the top to perform a text search across all fields.
+- Use the search bar at the top to perform a text search across all fields.
 
 ### Advanced Filtering
-1. Select a data type from the "All Data Types" dropdown.
-2. Each data type has specific filters available:
-   - **Call Records**: Filter by date range, duration, tower ID, call direction, phone numbers, etc.
-   - **Text/MMS Messages**: Filter by date, message type, direction, content, sender/recipient.
-   - **Device Information**: Filter by device ID, type, manufacturer.
-   - **Data Sessions**: Filter by date, tower/cell ID, duration, IP addresses, technology, data volume, port allocation time.
-3. Click "Apply Filters" to filter the data based on your criteria.
-4. Click "Reset" to clear all filters.
+1. Choose a data type from the **"All Data Types"** dropdown.
+2. Apply filters specific to each data type (e.g., date range for call records or device manufacturer for device info).
+3. Click **"Apply Filters"** to update the view.
+4. Use **"Reset"** to clear filters.
 
-### Dynamic Filters
-- For fields found in the data but not predefined in the system, the application creates "Additional Fields Filters" automatically.
-- These allow you to filter by any field present in your data.
+### Interactive Map
+- View cell towers on an interactive map.
+- Click markers for detailed information.
+- Use marker clustering to simplify dense data areas.
 
-## Data Visualization
+---
 
-1. Data is displayed in a table format with pagination (100 records per page).
-2. Click on column headers to sort by that column.
-3. For call records, you can check "Group by Phone" to aggregate towers and locations.
-4. Additional fields discovered in the data are highlighted with a light background in the table.
+## ⚙️ Data Type Configuration
 
-## Exporting Data
+1. Navigate to the **Data Type Configuration** tab.
+2. Edit an existing data type or click **"Create New Data Type"**.
+3. Define:
+   - **Data Type Name** and **Identifier Pattern** for auto-detection.
+   - **Field Definitions:**  
+     - **Display Name** for UI representation.
+     - **Possible Column Names:** A comma-separated list.
+     - **Field Type:** Text, Number, Date, or Boolean.
+4. Save your changes.  
+5. Import/export data type definitions as JSON for easy sharing and backup.
 
-- Click "Export Filtered CSV" to download the current filtered dataset as a CSV file.
+---
 
-## Data Type Configuration
+## ⚡ Performance Tips
 
-To customize or create new data types:
+- **Optimize File Handling:**  
+  - Use filters to reduce dataset size before analysis.
+  - For Excel files with >10,000 rows, consider splitting into smaller files.
+  - Close unnecessary browser tabs to free up resources.
 
-1. Go to the "Data Type Configuration" tab.
-2. Select an existing data type to edit or choose "Create New Data Type".
-3. Define the data type name and identifier pattern (used for auto-detection).
-4. Add field definitions by clicking "Add Field":
-   - **Display Name**: How the field appears in the UI
-   - **Possible column names**: Comma-separated list of possible column headers for this field
-   - **Field Type**: Text, Number, Date, or Boolean
-5. Click "Save" to save your data type definition.
+- **Wait for Loading:**  
+  - Ensure the loading indicator has finished before interacting with the data.
 
-You can also:
-- Export all data type definitions to a JSON file
-- Import data type definitions from a JSON file
-- Delete custom data type definitions
+---
 
-## Performance Optimization
+## 🛠️ Troubleshooting
 
-For large datasets:
-1. The application uses chunked processing to handle large files efficiently.
-2. Table data is paginated to improve rendering performance.
-3. For very large Excel files (>10MB), data is processed in batches.
-4. When working with files containing thousands of records, filtering is recommended before analyzing.
+- **File Upload Issues:**  
+  - Confirm the file is in CSV or Excel format.
+  
+- **Slow Processing:**  
+  - Use advanced filters to limit data before processing.
+  
+- **Mapping Errors:**  
+  - Verify that name mappings are correctly imported.
 
-## Tips for Best Performance
+---
 
-1. Use specific filters to reduce the dataset size before analysis.
-2. Close other browser tabs when processing very large files.
-3. For Excel files with more than 10,000 rows, consider splitting into smaller files for better performance.
-4. Wait for the loading indicator to disappear before interacting with the application.
+## 🤝 Contributing
+
+Contributions are welcome! To contribute:
+1. Fork the repository.
+2. Create a new branch:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+3. Commit your changes:
+   ```bash
+   git commit -m "Add your message"
+   ```
+4. Push to your branch:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+5. Open a pull request.
+
+For more details, see the [Contributing Guidelines](CONTRIBUTING.md).
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## 📧 Contact
+
+For questions or issues, please [open an issue](https://github.com/ColinVaughn/CSV-Tower-Viewer/issues) or contact the maintainers directly.
+
+---
