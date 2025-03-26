@@ -448,6 +448,10 @@
   let detectedDataTypes = new Set(); // Currently detected data types
   let currentFields; // To store current fields for dynamic filtering
 
+  // Global variables for sorting
+  let sortColumn = -1;
+  let sortDirection = 1; // 1 for ascending, -1 for descending
+
   // Initialize with built-in data types
   function initializeDataTypes() {
     // Call Records data type
@@ -457,15 +461,21 @@
       fields: [
         { name: "Msisdn", keys: ["msisdn", "volte msisdn"], type: "text" },
         { name: "Search Value", keys: ["search value", "volte search value"], type: "text" },
-        { name: "Search Start", keys: ["search start (gmt)", "volte search start (gmt)"], type: "date" },
-        { name: "Search End", keys: ["search end (gmt)", "volte search end (gmt)"], type: "date" },
-        { name: "Record Open Time", keys: ["rcd open dt/tm (gmt)", "record open dt/tm(gmt)", "record open date/time", "volte rcd open dt/tm(gmt)", "volte record open date/time"], type: "date" },
-        { name: "Duration", keys: ["timeusage", "sou"], type: "number" },
+        { name: "Search Start", keys: ["search start (gmt)", "volte search start (gmt)", "search start", "start date"], type: "date" },
+        { name: "Search End", keys: ["search end (gmt)", "volte search end (gmt)", "search end", "end date"], type: "date" },
+        { name: "Record Open Time", keys: ["rcd open dt/tm (gmt)", "record open dt/tm(gmt)", "record open date/time", "volte rcd open dt/tm(gmt)", "volte record open date/time", "call date", "call time"], type: "date" },
+        { name: "Duration", keys: ["timeusage", "sou", "duration"], type: "number" },
         { name: "Call Direction", keys: ["calldirection", "dir", "volte dir"], type: "text" },
         { name: "Calling Party", keys: ["calling party no", "cpn", "volte cpn", "volte calling party no"], type: "text" },
         { name: "Called Party", keys: ["called prty addr", "called #", "volte called #", "volte called prty addr"], type: "text" },
         { name: "Primary Tower", keys: ["mkt enodeb id", "enb id", "market id", "volte enb id", "volte market id", "volte mkt enodeb id"], type: "text" },
-        { name: "Cell ID", keys: ["ani cell id", "cell id", "volte cell id", "volte ani cell id"], type: "text" }
+        { name: "Cell ID", keys: ["ani cell id", "cell id", "volte cell id", "volte ani cell id"], type: "text" },
+        { name: "Cell Face", keys: ["cell face", "face", "sector", "cell_face"], type: "text" },
+        { name: "RAT", keys: ["rat", "radio access type", "radio access technology"], type: "text" },
+        { name: "SID", keys: ["sid", "system id"], type: "text" },
+        { name: "NID", keys: ["nid", "network id"], type: "text" },
+        { name: "ENDPOINT", keys: ["endpoint"], type: "text" },
+        { name: "VZWNE/V4B", keys: ["vzwne/v4b"], type: "text" }
       ]
     };
 
@@ -474,7 +484,7 @@
       name: "Text Messages",
       identifier: "sms|text|mms|message|textdetail",
       fields: [
-        { name: "Message Time", keys: ["messagearrival", "record date/time", "submission date/time"], type: "date" },
+        { name: "Message Time", keys: ["messagearrival", "record date/time", "submission date/time", "date/time", "message date"], type: "date" },
         { name: "Message Type", keys: ["network element name"], type: "text" },
         { name: "Direction", keys: ["charge information"], type: "text" },
         { name: "Sender", keys: ["originator address", "originatingmdn"], type: "text" },
@@ -500,7 +510,7 @@
         { name: "Device Name", keys: ["eqp_name"], type: "text" },
         { name: "Device Type", keys: ["device_type"], type: "text" },
         { name: "Status", keys: ["mtn_status"], type: "text" },
-        { name: "Effective Date", keys: ["mtn_effective_date"], type: "date" }
+        { name: "Effective Date", keys: ["mtn_effective_date", "mtn status effective date", "status effective date"], type: "date" }
       ]
     };
 
@@ -513,7 +523,7 @@
         { name: "Account Number", keys: ["account number"], type: "text" },
         { name: "Name", keys: ["last name", "first name", "business name"], type: "text" },
         { name: "Status", keys: ["mtn status code"], type: "text" },
-        { name: "Effective Date", keys: ["mtn effective date"], type: "date" },
+        { name: "Effective Date", keys: ["mtn effective date", "mtn status effective date"], type: "date" },
         { name: "Disconnect Date", keys: ["disconnect date"], type: "date" }
       ]
     };
@@ -525,8 +535,8 @@
       fields: [
         { name: "Msisdn", keys: ["search mtn"], type: "text" },
         { name: "Account Number", keys: ["account number"], type: "text" },
-        { name: "Date", keys: ["date", "invoice date"], type: "date" },
-        { name: "Amount", keys: ["payment amount"], type: "number" },
+        { name: "Date", keys: ["date", "invoice date", "bill cycle start date", "bill cycle end date"], type: "date" },
+        { name: "Amount", keys: ["payment amount", "previous balance", "current charges", "total balance"], type: "number" },
         { name: "Payment Method", keys: ["payment method"], type: "text" },
         { name: "Payment Source", keys: ["payment source"], type: "text" },
         { name: "Payment Status", keys: ["payment status"], type: "text" }
@@ -541,7 +551,7 @@
         { name: "MSISDN", keys: ["msisdn", "phone", "phonenumber", "number", "device_number", "calling_number"], type: "text" },
         { name: "Session Start", keys: ["session_start", "start_time", "starttime", "session_date", "date", "start_date"], type: "date" },
         { name: "Session End", keys: ["session_end", "end_time", "endtime", "end_date"], type: "date" },
-        { name: "Duration", keys: ["duration", "session_duration", "time", "seconds"], type: "number" },
+        { name: "Duration", keys: ["duration", "session_duration", "time_seconds", "seconds", "duration_sec", "duration_seconds"], type: "number" },
         { name: "Cell ID", keys: ["cell_id", "cellid", "cell", "sector", "sector_id", "sectorid"], type: "text" },
         { name: "Tower ID", keys: ["tower_id", "towerid", "tower", "site_id", "siteid"], type: "text" },
         { name: "Sector", keys: ["sector", "cell_sector", "sectorid", "sector_id"], type: "text" },
@@ -622,14 +632,33 @@
 
   // Helper function to get field value from a record using multiple possible keys
   function getField(record, possibleKeys) {
-    // Check for exact key matches first
+    // Special handling for cell face and tower-related fields
+    const nonDateFieldKeys = ['cell face', 'face', 'cell_face', 'sector', 'sid', 'nid', 'endpoint', 'vzwne/v4b', 'rat'];
+    const isNonDateField = possibleKeys.some(key => nonDateFieldKeys.includes(key.toLowerCase()));
+    
+    // Special handling for duration fields to avoid confusion with datetime fields
+    const isDurationField = possibleKeys.some(key => 
+      ['duration', 'session_duration', 'time_seconds', 'seconds', 'duration_sec', 'duration_seconds'].includes(key.toLowerCase())
+    );
+    
+    // First attempt: check for exact key matches
     for (const key of possibleKeys) {
       if (record[key] !== undefined && record[key] !== null && record[key] !== "") {
+        // Special handling for duration field
+        if (isDurationField) {
+          // Ensure duration is treated as a number, not a date/time
+          const val = record[key];
+          // If the value is a string that looks like a date, it's probably not duration
+          if (typeof val === 'string' && (val.includes('/') || val.includes('-') && val.includes(':'))) {
+            continue; // Skip this value, it's likely not a duration
+          }
+          return val;
+        }
         return record[key];
       }
     }
     
-    // If no exact match, try case-insensitive matching with special handling for NAT vs non-NAT fields
+    // Second attempt: try case-insensitive matching
     const recordKeys = Object.keys(record);
     
     for (const key of possibleKeys) {
@@ -656,14 +685,53 @@
           }
         }
       }
+      else if (isDurationField) {
+        // For duration fields, be more selective
+        for (const recordKey of recordKeys) {
+          const recordKeyLower = recordKey.toLowerCase();
+          if ((recordKeyLower.includes('duration') || recordKeyLower.includes('seconds')) && 
+              !recordKeyLower.includes('date') && !recordKeyLower.includes('time')) {
+            // Check if the value looks like a duration (number) and not a date
+            const val = record[recordKey];
+            if (typeof val === 'number' || (typeof val === 'string' && !val.includes(':') && !isNaN(parseFloat(val)))) {
+              return val;
+            }
+          }
+        }
+      }
       else {
         // Standard fuzzy matching for non-IP fields
         for (const recordKey of recordKeys) {
           const recordKeyLower = recordKey.toLowerCase();
           if (recordKeyLower.includes(keyLower) || keyLower.includes(recordKeyLower)) {
+            // For non-date fields, return as is - don't convert to date even if it looks like one
+            if (isNonDateField) {
+              return record[recordKey].toString();
+            }
             return record[recordKey];
           }
         }
+      }
+    }
+    
+    // If no match found for duration, try to calculate it
+    if (isDurationField) {
+      try {
+        // See if we can calculate duration from start and end times
+        const startTimeStr = getField(record, ["session_start", "start_time", "starttime", "session_date", "date", "start_date"]);
+        const endTimeStr = getField(record, ["session_end", "end_time", "endtime", "end_date"]);
+        
+        if (startTimeStr && endTimeStr) {
+          const startTime = new Date(startTimeStr);
+          const endTime = new Date(endTimeStr);
+          
+          if (!isNaN(startTime.getTime()) && !isNaN(endTime.getTime())) {
+            const durationSeconds = Math.round((endTime - startTime) / 1000);
+            return durationSeconds > 0 ? durationSeconds : ""; 
+          }
+        }
+      } catch (e) {
+        console.log("Error calculating duration:", e);
       }
     }
     
@@ -940,21 +1008,132 @@
     }
   }
 
+  // Function to convert GMT timestamps to local time
+  function convertGmtToLocalTime(dateString) {
+    try {
+      // Remove surrounding quotes if present
+      dateString = dateString.replace(/^["']|["']$/g, '');
+      
+      // Skip empty or invalid strings
+      if (!dateString || dateString === '""' || dateString === "''") {
+        return '';
+      }
+      
+      // Check if this is a date in a standard format that might be GMT
+      const isLikelyGmtTimestamp = 
+        dateString.toLowerCase().includes('gmt') || 
+        /\d{1,2}\/\d{1,2}\/\d{4}\s\d{1,2}:\d{1,2}/.test(dateString) ||
+        /\d{4}-\d{1,2}-\d{1,2}\s\d{1,2}:\d{1,2}/.test(dateString);
+      
+      if (!isLikelyGmtTimestamp) {
+        return dateString;
+      }
+      
+      // Remove GMT or (GMT) from the string for cleaner parsing
+      let cleanStr = dateString.replace(/\(GMT\)|GMT/gi, '').trim();
+      
+      // Handle common date formats
+      let date;
+      
+      // Try direct parsing first
+      date = new Date(cleanStr);
+      
+      // If that fails, try various formats
+      if (isNaN(date.getTime())) {
+        // Try MM/DD/YYYY HH:MM:SS format
+        const mmDdYyyyMatch = cleanStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+        if (mmDdYyyyMatch) {
+          const [_, month, day, year, hours, minutes, seconds = 0] = mmDdYyyyMatch;
+          date = new Date(year, month - 1, day, hours, minutes, seconds);
+        }
+        
+        // Try YYYY-MM-DD HH:MM:SS format
+        const yyyyMmDdMatch = cleanStr.match(/(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+        if (yyyyMmDdMatch) {
+          const [_, year, month, day, hours, minutes, seconds = 0] = yyyyMmDdMatch;
+          date = new Date(year, month - 1, day, hours, minutes, seconds);
+        }
+      }
+      
+      if (!isNaN(date.getTime())) {
+        // Format in local time with both date and time
+        return date.toLocaleString() + ' (local)';
+      }
+    } catch (e) {
+      console.error("Error converting GMT time:", e, dateString);
+    }
+    return dateString; // Return original if conversion fails
+  }
+
+  // Helper function to check if a field name might contain a date
+  function isDateField(fieldName) {
+    if (!fieldName) return false;
+    
+    const fieldLower = fieldName.toLowerCase();
+    
+    // List of fields that should never be treated as dates
+    const nonDateFields = ['cell face', 'face', 'cell_face', 'sector', 'sid', 'nid', 'endpoint', 'vzwne', 'v4b', 'rat'];
+    if (nonDateFields.some(term => fieldLower.includes(term))) {
+      return false;
+    }
+    
+    const dateParts = ['date', 'time', 'dt', 'gmt', 'timestamp', 'datetime'];
+    return dateParts.some(part => fieldLower.includes(part));
+  }
+
   // Helper function to format a value based on its data type
-  function formatValue(value, type) {
+  function formatValue(value, type, fieldName) {
     if (!value) return '';
     
-    switch(type) {
-      case 'date':
-        // Try to parse and format the date
-        try {
-          const date = new Date(value);
-          if (!isNaN(date.getTime())) {
-            return date.toLocaleString();
-          }
-        } catch (e) {}
-        return value;
+    // Special handling for fields that should never be treated as dates
+    const fieldLower = fieldName ? fieldName.toLowerCase() : '';
+    const nonDateFields = ['cell face', 'face', 'cell_face', 'sector', 'sid', 'nid', 'endpoint', 'vzwne/v4b', 'rat'];
+    if (nonDateFields.some(term => fieldLower.includes(term))) {
+      return value.toString(); // Always return as plain text
+    }
+    
+    // Special handling for duration fields
+    if (fieldLower === 'duration' || fieldLower.includes('duration') || fieldLower.includes('seconds')) {
+      // Handle duration formatting
+      let seconds = parseFloat(value);
+      if (!isNaN(seconds)) {
+        // Format duration in a human-readable way
+        if (seconds < 60) {
+          return seconds.toFixed(3) + ' sec';
+        } else if (seconds < 3600) {
+          const minutes = Math.floor(seconds / 60);
+          const remainingSeconds = seconds % 60;
+          return minutes + 'm ' + remainingSeconds.toFixed(0) + 's';
+        } else {
+          const hours = Math.floor(seconds / 3600);
+          const minutes = Math.floor((seconds % 3600) / 60);
+          const remainingSeconds = seconds % 60;
+          return hours + 'h ' + minutes + 'm ' + remainingSeconds.toFixed(0) + 's';
+        }
+      }
+      return value;
+    }
+    
+    // Special handling for date fields, whether they're marked as dates or not
+    if (type === 'date' || isDateField(fieldName)) {
+      // Try to parse and format the date
+      try {
+        // Check if the value contains GMT or is likely a GMT timestamp
+        if (typeof value === 'string' && (value.toLowerCase().includes('gmt') || 
+            (/\d{1,2}\/\d{1,2}\/\d{4}\s\d{1,2}:\d{1,2}/.test(value)) ||
+            (/\d{4}-\d{1,2}-\d{1,2}\s\d{1,2}:\d{1,2}/.test(value)))) {
+          return convertGmtToLocalTime(value);
+        }
         
+        const date = new Date(value);
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleString();
+        }
+      } catch (e) {}
+      return value;
+    }
+    
+    switch(type) {
       case 'number':
         // Try to format as a number
         const num = parseFloat(value);
@@ -981,25 +1160,58 @@
     const definition = dataTypeDefinitions[dataType];
     document.getElementById("tableTitle").innerText = `${definition.name} (${dataset.length} records)`;
     
+    // Create a lookup of predefined field keys for more efficient matching
+    const predefinedFieldKeyMap = new Map();
+    definition.fields.forEach(field => {
+      field.keys.forEach(key => {
+        predefinedFieldKeyMap.set(key.toLowerCase(), field);
+      });
+    });
+    
     // Collect all fields present in the dataset that aren't in the definition
     let additionalFields = new Set();
+    
+    // For logging and debugging
+    console.log("Predefined fields:", definition.fields.map(f => f.name));
+    
     dataset.forEach(record => {
       Object.keys(record).forEach(key => {
-        if (key !== 'fileType' && !definition.fields.some(field => field.keys.includes(key.toLowerCase()))) {
-          // Check if this key isn't already captured by fuzzy matching
-          let matched = false;
-          for (const field of definition.fields) {
-            if (getField(record, field.keys) === record[key]) {
-              matched = true;
-              break;
-            }
+        // Skip the fileType field which is internal
+        if (key === 'fileType') return;
+        
+        const keyLower = key.toLowerCase();
+        
+        // Check if this key is directly matched in the predefined fields
+        if (predefinedFieldKeyMap.has(keyLower)) return;
+        
+        // Check if this key is captured by fuzzy matching
+        let matched = false;
+        for (const field of definition.fields) {
+          // Get value using the field's keys
+          const valueFromField = getField(record, field.keys);
+          
+          // Compare with direct record access
+          if (valueFromField === record[key]) {
+            matched = true;
+            break;
           }
-          if (!matched) {
-            additionalFields.add(key);
+          
+          // Also check for fuzzy key matching
+          if (field.keys.some(fieldKey => 
+              keyLower.includes(fieldKey.toLowerCase()) || 
+              fieldKey.toLowerCase().includes(keyLower))) {
+            matched = true;
+            break;
           }
+        }
+        
+        if (!matched) {
+          additionalFields.add(key);
         }
       });
     });
+    
+    console.log("Additional fields detected:", Array.from(additionalFields));
     
     // Combine predefined fields with additional fields
     const allFields = [...definition.fields];
@@ -1033,7 +1245,8 @@
           // For predefined fields, use getField for fuzzy matching
           value = getField(record, field.keys);
         }
-        return `<td>${formatValue(value, field.type)}</td>`;
+        // Pass field name to formatValue for better date detection
+        return `<td>${formatValue(value, field.type, field.name)}</td>`;
       }).join('');
       
       return `<tr>${cells}</tr>`;
@@ -1048,8 +1261,16 @@
 
   // Guess the field type based on values
   function guessFieldType(dataset, field) {
+    // Special case for known non-date fields despite potentially having date-like values
+    const fieldLower = field.toLowerCase();
+    const nonDateFields = ['cell face', 'face', 'cell_face', 'sector', 'sid', 'nid', 'endpoint', 'vzwne', 'v4b', 'rat'];
+    if (nonDateFields.some(term => fieldLower.includes(term))) {
+      return 'text';
+    }
+    
     // Sample a few records to determine type
     let dateCount = 0;
+    let gmtCount = 0;
     let numberCount = 0;
     let total = 0;
     
@@ -1058,11 +1279,19 @@
     for (let i = 0; i < sampleSize; i++) {
       if (dataset[i] && dataset[i][field]) {
         total++;
-        const value = dataset[i][field];
+        const value = dataset[i][field].toString();
+        
+        // Check if it explicitly contains GMT
+        if (value.toLowerCase().includes('gmt')) {
+          gmtCount++;
+          dateCount++;
+          continue;
+        }
         
         // Check if it looks like a date
         if (value.includes('-') && value.includes(':') || 
             /^\d{1,4}[-./]\d{1,2}[-./]\d{1,4}/.test(value) ||
+            /\d{1,2}\/\d{1,2}\/\d{4}\s\d{1,2}:\d{1,2}/.test(value) ||
             !isNaN(Date.parse(value))) {
           dateCount++;
         }
@@ -1075,7 +1304,7 @@
     
     // Determine type based on majority
     if (total > 0) {
-      if (dateCount / total > 0.7) return 'date';
+      if (dateCount / total > 0.7 || gmtCount > 0) return 'date';
       if (numberCount / total > 0.7) return 'number';
     }
     
@@ -1091,6 +1320,15 @@
     const dynamicFields = fields.filter(field => field.isDynamic);
     if (dynamicFields.length === 0) return;
     
+    // Skip fields that are just underscores and numbers (likely empty fields)
+    const validDynamicFields = dynamicFields.filter(field => {
+      const name = field.name.toLowerCase();
+      // Skip fields that match patterns like _EMPTY, _EMPTY 1, etc.
+      return !name.match(/^_*empty\s*\d*$/i);
+    });
+    
+    if (validDynamicFields.length === 0) return;
+    
     // Create dynamic filter section
     const section = document.createElement('div');
     section.className = 'mt-3';
@@ -1103,7 +1341,7 @@
     // Create filters in rows of 3
     let currentRow;
     
-    dynamicFields.forEach((field, index) => {
+    validDynamicFields.forEach((field, index) => {
       if (index % 3 === 0) {
         currentRow = document.createElement('div');
         currentRow.className = 'row mt-2';
@@ -1145,6 +1383,9 @@
     });
     
     dynamicFiltersContainer.appendChild(section);
+
+    // Debug logging to help understand field detection issues
+    console.log(`Dynamic fields for ${dataType}:`, validDynamicFields);
   }
 
   // Apply advanced filters based on input fields and data types
@@ -1430,7 +1671,28 @@
       }
       
       // Duration filters
-      const duration = parseInt(getField(record, ['duration', 'session_duration']), 10);
+      const durationKeys = ['duration', 'session_duration', 'time_seconds', 'seconds', 'duration_sec', 'duration_seconds'];
+      let duration = parseFloat(getField(record, durationKeys));
+      
+      // If no explicit duration field, try to calculate from start/end times
+      if (isNaN(duration) || duration === 0) {
+        try {
+          const startTimeStr = getField(record, ["session_start", "start_time", "starttime", "session_date", "date", "start_date"]);
+          const endTimeStr = getField(record, ["session_end", "end_time", "endtime", "end_date"]);
+          
+          if (startTimeStr && endTimeStr) {
+            const startTime = new Date(startTimeStr);
+            const endTime = new Date(endTimeStr);
+            
+            if (!isNaN(startTime.getTime()) && !isNaN(endTime.getTime())) {
+              duration = Math.round((endTime - startTime) / 1000);
+            }
+          }
+        } catch (e) {
+          console.log("Error calculating duration in filter:", e);
+        }
+      }
+      
       if (minDuration && (!duration || duration < parseInt(minDuration, 10))) {
         return false;
       }
@@ -1498,15 +1760,26 @@
     const dynamicFields = currentFields.filter(field => field.isDynamic);
     if (dynamicFields.length === 0) return records;
     
+    console.log("Applying dynamic filters for fields:", dynamicFields.map(f => f.name));
+    
     return records.filter(record => {
       for (const field of dynamicFields) {
         const filterInput = document.getElementById(`dynamicFilter_${field.keys[0]}`);
         if (!filterInput || !filterInput.value) continue;
         
         const filterValue = filterInput.value.toLowerCase();
-        const fieldValue = record[field.keys[0]];
+        let fieldValue;
         
-        if (!fieldValue) return false;
+        // Get the field value
+        if (field.isDynamic) {
+          // Direct access for dynamic fields
+          fieldValue = record[field.keys[0]];
+        } else {
+          // Use getField for predefined fields
+          fieldValue = getField(record, field.keys);
+        }
+        
+        if (!fieldValue) continue;
         
         if (field.type === 'number') {
           const numValue = parseFloat(fieldValue);
@@ -1773,6 +2046,9 @@
     // Initialize data types
     initializeDataTypes();
     
+    // Add sort styles
+    addSortStyles();
+    
     // Set up event listeners
     document.getElementById('dataTypeSelector').addEventListener('change', updateDataTypeConfig);
     document.getElementById('editDataTypeBtn').addEventListener('click', function() {
@@ -1842,6 +2118,158 @@
       };
       reader.readAsArrayBuffer(file);
     });
+  }
+
+  // Render a generic table for unrecognized data types
+  function renderGenericTable(dataset) {
+    if (dataset.length === 0) {
+      document.getElementById("tableTitle").innerText = "No data to display";
+      document.getElementById("tableHeader").innerHTML = "";
+      document.querySelector('#resultTable tbody').innerHTML = "";
+      return;
+    }
+
+    document.getElementById("tableTitle").innerText = `Generic Data (${dataset.length} records)`;
+    
+    // Get all unique columns across all records
+    const allColumns = new Set();
+    dataset.forEach(record => {
+      Object.keys(record).forEach(key => {
+        if (key !== 'fileType') {
+          allColumns.add(key);
+        }
+      });
+    });
+    
+    // Create column objects with name and type
+    const columns = Array.from(allColumns).map(column => {
+      return {
+        name: column.charAt(0).toUpperCase() + column.slice(1).replace(/_/g, ' '),
+        key: column,
+        type: guessFieldType(dataset, column)
+      };
+    });
+    
+    // Create header row
+    const headerHtml = columns.map((column, index) => 
+      `<th onclick="sortTable(${index})">${column.name}</th>`
+    ).join('');
+    
+    document.getElementById("tableHeader").innerHTML = headerHtml;
+    
+    // Create table body
+    const tbody = document.querySelector('#resultTable tbody');
+    tbody.innerHTML = dataset.map(record => {
+      return `<tr>${columns.map(column => {
+        const value = record[column.key] || '';
+        // Pass column name to help with date detection
+        return `<td>${formatValue(value, column.type, column.name)}</td>`;
+      }).join('')}</tr>`;
+    }).join('');
+    
+    // Store the current fields for dynamic filtering
+    currentFields = columns;
+    
+    // Update dynamic filters
+    updateDynamicFilters('unknown', columns);
+  }
+
+  // Sort table by column
+  function sortTable(column) {
+    // If clicking the same column, reverse sort direction
+    if (sortColumn === column) {
+      sortDirection *= -1;
+    } else {
+      sortColumn = column;
+      sortDirection = 1;
+    }
+    
+    const table = document.getElementById('resultTable');
+    const headers = table.querySelectorAll('th');
+    
+    // Update header classes to show sort direction
+    headers.forEach((header, index) => {
+      if (index === column) {
+        header.classList.remove('asc', 'desc');
+        header.classList.add(sortDirection === 1 ? 'asc' : 'desc');
+      } else {
+        header.classList.remove('asc', 'desc');
+      }
+    });
+    
+    // Get table rows as array
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    
+    // Determine data type of the column for proper sorting
+    const dataType = currentFields && currentFields[column] ? 
+      currentFields[column].type : 'text';
+    
+    // Sort the rows
+    rows.sort((a, b) => {
+      const aCell = a.cells[column];
+      const bCell = b.cells[column];
+      
+      // Get values, removing any "(local)" suffix from date conversions
+      let aValue = (aCell.textContent || aCell.innerText).replace(' (local)', '');
+      let bValue = (bCell.textContent || bCell.innerText).replace(' (local)', '');
+      
+      // Handle different data types
+      if (dataType === 'number') {
+        // Sort numerically
+        const aNum = parseFloat(aValue.replace(/,/g, ''));
+        const bNum = parseFloat(bValue.replace(/,/g, ''));
+        
+        // Handle NaN values
+        if (isNaN(aNum) && isNaN(bNum)) return 0;
+        if (isNaN(aNum)) return sortDirection;
+        if (isNaN(bNum)) return -sortDirection;
+        
+        return sortDirection * (aNum - bNum);
+      } else if (dataType === 'date') {
+        // Parse dates for comparison
+        const aDate = new Date(aValue);
+        const bDate = new Date(bValue);
+        
+        // Handle invalid dates
+        const aValid = !isNaN(aDate.getTime());
+        const bValid = !isNaN(bDate.getTime());
+        
+        if (!aValid && !bValid) return 0;
+        if (!aValid) return sortDirection;
+        if (!bValid) return -sortDirection;
+        
+        return sortDirection * (aDate - bDate);
+      } else {
+        // Default to string comparison
+        if (aValue < bValue) return -sortDirection;
+        if (aValue > bValue) return sortDirection;
+        return 0;
+      }
+    });
+    
+    // Reorder the rows in the tbody
+    rows.forEach(row => tbody.appendChild(row));
+  }
+
+  // Add some CSS for sort indicators in headers
+  function addSortStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+      th.asc::after {
+        content: " ▲";
+        color: #007bff;
+      }
+      th.desc::after {
+        content: " ▼";
+        color: #007bff;
+      }
+      th {
+        position: relative;
+        padding-right: 18px;
+      }
+    `;
+    document.head.appendChild(style);
   }
 </script>
 </body>
